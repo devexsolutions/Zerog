@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zerog-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Montamos el código local para desarrollo (hot-reload)
+      - ./backend:/app/backend
+      # Persistencia de archivos subidos
+      - backend_uploads:/app/backend/uploads
+      # Persistencia de la base de datos SQLite
+      - backend_db:/app/backend/db
+    environment:
+      # DATABASE_URL: ruta a la base de datos dentro del contenedor.
+      # Usamos /app/backend/db para persistencia en el volumen backend_db
+      - DATABASE_URL=sqlite:///./backend/db/antigravity.db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: zerog-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # URL del backend desde el navegador (cliente)
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_uploads:
+  backend_db:

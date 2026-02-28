@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# FastAPI / Database
+*.db
+*.sqlite3
+backend/db/*.db
+backend/uploads/
+
+# Node.js / Next.js
+node_modules/
+/node_modules
+.next/
+out/
+build/
+dist/
+.DS_Store
+*.log
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+docker-compose.override.yml
