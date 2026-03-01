@@ -45,7 +45,7 @@ export default function Home() {
 
   const fetchCases = async () => {
     try {
-      const res = await fetch('http://localhost:8000/cases/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/cases/`, {
         headers: {
             'Authorization': `Bearer ${token}`
         }
@@ -116,7 +116,7 @@ export default function Home() {
   const createCase = async () => {
     if (!newCaseUserId) return;
     try {
-      const res = await fetch('http://localhost:8000/cases/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/cases/`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',

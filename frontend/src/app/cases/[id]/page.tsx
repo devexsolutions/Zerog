@@ -70,6 +70,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   
   const { token, logout } = useAuth();
   const router = useRouter();
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   useEffect(() => {
     setIsMounted(true);
@@ -87,10 +88,10 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       };
       
       const [caseRes, checkRes, calcRes, distRes] = await Promise.all([
-        fetch(`http://localhost:8000/cases/${caseId}`, { headers }),
-        fetch(`http://localhost:8000/cases/${caseId}/checklist`, { headers }),
-        fetch(`http://localhost:8000/cases/${caseId}/calculate`, { headers }),
-        fetch(`http://localhost:8000/cases/${caseId}/distribution`, { headers })
+        fetch(`${API_URL}/cases/${caseId}`, { headers }),
+        fetch(`${API_URL}/cases/${caseId}/checklist`, { headers }),
+        fetch(`${API_URL}/cases/${caseId}/calculate`, { headers }),
+        fetch(`${API_URL}/cases/${caseId}/distribution`, { headers })
       ]);
 
       if (caseRes.status === 401 || checkRes.status === 401 || calcRes.status === 401) {
@@ -120,7 +121,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
     formData.append('type', docType);
 
     try {
-      const res = await fetch(`http://localhost:8000/cases/${caseId}/upload-doc/`, {
+      const res = await fetch(`${API_URL}/cases/${caseId}/upload-doc/`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`
@@ -142,7 +143,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
   const handleDownloadReport = async () => {
     try {
-        const res = await fetch(`http://localhost:8000/cases/${caseId}/report`, {
+        const res = await fetch(`${API_URL}/cases/${caseId}/report`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -165,7 +166,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
   const handleDownloadModel650 = async () => {
     try {
-        const res = await fetch(`http://localhost:8000/cases/${caseId}/model650`, {
+        const res = await fetch(`${API_URL}/cases/${caseId}/model650`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -188,7 +189,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
   const handleDownloadModel650XML = async () => {
     try {
-        const res = await fetch(`http://localhost:8000/cases/${caseId}/model650/xml`, {
+        const res = await fetch(`${API_URL}/cases/${caseId}/model650/xml`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -218,7 +219,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
     setSearchingCatastro(true);
     setCatastroData(null);
     try {
-        const res = await fetch(`http://localhost:8000/integrations/catastro/${catastroRef}`, {
+        const res = await fetch(`${API_URL}/integrations/catastro/${catastroRef}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -254,7 +255,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
               is_funeral_expense: false
           };
 
-          const res = await fetch(`http://localhost:8000/cases/${caseId}/assets/`, {
+          const res = await fetch(`${API_URL}/cases/${caseId}/assets/`, {
               method: 'POST',
               headers: {
                   'Content-Type': 'application/json',
