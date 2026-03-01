@@ -2,9 +2,9 @@ import sys
 import os
 
 from sqlalchemy.orm import Session
-from .database import SessionLocal, engine
-from .models import Base, User, Case, Heir, Asset, CaseStatus, AssetType
-from .auth import get_password_hash
+from backend.database import SessionLocal, engine
+from backend.models import Base, User, Case, Heir, Asset, CaseStatus, AssetType
+from backend.auth import get_password_hash
 from datetime import datetime, timedelta
 
 def seed_data():
