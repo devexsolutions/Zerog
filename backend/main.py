@@ -26,7 +26,7 @@ app.mount("/uploads", StaticFiles(directory="backend/uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For development, allow all. In prod, restrict to frontend domain.
+    allow_origins=["*"], # Allow all origins for now to fix Easypanel connectivity
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
