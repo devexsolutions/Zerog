@@ -6,7 +6,7 @@ from .models import CaseStatus, DocStatus, DocType, AssetType
 # --- Heir Schemas ---
 class HeirBase(BaseModel):
     name: str
-    relationship: str
+    relationship: Optional[str] = None # Coincide con relationship_degree en modelo
     share_percentage: float
     pre_existing_wealth: float = 0.0
     tax_percentage: Optional[float] = None
@@ -18,6 +18,7 @@ class HeirCreate(HeirBase):
 class Heir(HeirBase):
     id: int
     case_id: int
+    relationship_degree: Optional[str] = None # Added to map from DB model
 
     class Config:
         orm_mode = True
