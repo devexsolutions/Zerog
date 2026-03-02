@@ -27,31 +27,38 @@ class CatastroService:
             data = xmltodict.parse(response.content)
             
             # Check for errors in Catastro response
-            if 'consulta_dnprc' in data and 'lerr' in data['consulta_dnprc']:
+            # Note: Depending on the endpoint version, the root might be 'consulta_dnp' or 'consulta_dnprc'
+            root = data.get('consulta_dnp') or data.get('consulta_dnprc')
+            
+            if not root:
+                 return {"error": "Respuesta inesperada de Catastro", "raw": data}
+
+            if 'lerr' in root:
+                 # Check if lerr has err inside
+                 err_info = root['lerr'].get('err', {})
+                 # If err is a list or dict, convert to string safely
                  return {
-                    "error": "Referencia Catastral no encontrada o inválida",
+                    "error": f"Error Catastro: {err_info}",
                     "raw": data
                 }
 
             # Extract relevant info
-            # Structure usually: consulta_dnprc -> bico -> bi -> (dt, ldt)
-            if 'consulta_dnprc' in data and 'bico' in data['consulta_dnprc']:
-                bi = data['consulta_dnprc']['bico']['bi']
+            # Structure usually: root -> bico -> bi -> (dt, ldt, debi)
+            if 'bico' in root and 'bi' in root['bico']:
+                bi = root['bico']['bi']
                 ldt = bi.get('ldt', "") # Dirección completa
-                de = bi.get('de', {}) # Datos económicos/uso
+                
+                # Datos económicos/uso usually in 'debi' (Datos Económicos Bien Inmueble)
+                # Fallback to 'de' just in case
+                de = bi.get('debi') or bi.get('de', {})
                 
                 # Extract usage and surface
                 usage = ""
                 surface = 0
                 
-                # 'de' can be a list or a dict, although for a single RC it's usually a dict inside 'bi'
-                # But 'bi' itself might be a list if multiple matches (rare for unique RC but possible)
                 if isinstance(de, dict):
                      usage = de.get('luso', "")
                      surface = de.get('sfc', 0)
-                
-                # Check for address in 'ldt' (Localización Descriptiva Texto)
-                # It's usually a string directly in 'bi' -> 'ldt'
                 
                 return {
                     "reference": ref_catastral,
