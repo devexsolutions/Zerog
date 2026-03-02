@@ -1,0 +1,24 @@
+DATOS DE PRUEBA PARA ZEROG
+
+1. DOCUMENTOS GENERADOS (en esta misma carpeta):
+   - test_dni.pdf: DNI simulado (12345678Z)
+   - test_certificado_defuncion.pdf: Certificado con fecha de defunción (15/01/2024) y DNI.
+   - test_certificado_bancario.pdf: Certificado con IBAN y saldo (150.000,00 €).
+   - test_testamento.pdf: Testamento con mención a herederos.
+
+2. REFERENCIA CATASTRAL VÁLIDA (Para probar integración con Catastro):
+   - Referencia: 9872023VH5797S0001WX
+   - Ubicación: Madrid
+   - Uso: Residencial
+
+3. INSTRUCCIONES DE PRUEBA:
+   a) Carga de Documentos:
+      - Ve a la pestaña "Documentación" de un expediente.
+      - Sube 'test_certificado_defuncion.pdf'. El sistema debería extraer la fecha de defunción (15/01/2024).
+      - Sube 'test_certificado_bancario.pdf'. El sistema debería extraer el saldo (150.000€) y crear un activo automáticamente.
+   
+   b) Integración Catastro:
+      - Ve a la pestaña "Activos".
+      - Haz clic en "Añadir Inmueble" (o similar).
+      - Introduce la Referencia Catastral: 9872023VH5797S0001WX
+      - Pulsa "Buscar". Deberían aparecer los datos de la calle y superficie.
