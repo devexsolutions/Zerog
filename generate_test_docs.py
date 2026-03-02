@@ -74,7 +74,7 @@ def create_bank_cert_pdf(filename):
     
     # IBAN Pattern (ESXX ...)
     c.setFont("Courier-Bold", 14)
-    c.drawString(100, 580, "ES12 3456 7890 1234 5678 9012")
+    c.drawString(100, 580, "ES12 3456 7890 12 1234567890")
     
     c.setFont("Helvetica", 12)
     c.drawString(100, 550, "Con un saldo acreedor de:")
