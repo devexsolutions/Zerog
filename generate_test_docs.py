@@ -24,7 +24,7 @@ def create_dni_pdf(filename):
     
     # DNI Pattern for OCR (XYZ + 7-8 digits + Letter)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(100, 550, "DNI: 12345678Z")
+    c.drawString(100, 530, "DNI: 12345678Z")
     
     c.save()
     print(f"Generated: {filename}")
@@ -50,7 +50,8 @@ def create_death_cert_pdf(filename):
     
     # Date Pattern: "falleció el día XX de XXXXX de XXXX" or "XX/XX/XXXX"
     c.drawString(100, 500, "Falleció el día 15 de Enero de 2024")
-    c.drawString(100, 480, "a las 10:30 horas en su domicilio.")
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(100, 480, "Fecha de Defunción: 15/01/2024")
     
     c.save()
     print(f"Generated: {filename}")
@@ -80,7 +81,7 @@ def create_bank_cert_pdf(filename):
     
     # Amount Pattern (European format)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(100, 530, "Saldo: 150.000,00 €")
+    c.drawString(100, 500, "Saldo Total: 150.000,00 EUR")
     
     c.save()
     print(f"Generated: {filename}")

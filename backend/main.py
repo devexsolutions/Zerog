@@ -36,6 +36,52 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to Antigravity API"}
 
+@app.get("/debug/ocr")
+def debug_ocr():
+    import subprocess
+    from PIL import Image, ImageDraw
+    import pytesseract
+    import sys
+    
+    logs = []
+    logs.append(f"CWD: {os.getcwd()}")
+    logs.append(f"Python: {sys.version}")
+    
+    # Check Tesseract binary
+    try:
+        result = subprocess.run(["tesseract", "--version"], capture_output=True, text=True)
+        logs.append(f"Tesseract Version: {result.stdout.splitlines()[0] if result.stdout else 'Unknown'}")
+    except Exception as e:
+        logs.append(f"Tesseract Error: {e}")
+
+    # Check Poppler (pdfinfo)
+    try:
+        result = subprocess.run(["pdfinfo", "-v"], capture_output=True, text=True)
+        # pdfinfo prints to stderr usually
+        logs.append(f"Poppler Version: {result.stderr.splitlines()[0] if result.stderr else 'Unknown'}")
+    except Exception as e:
+        logs.append(f"Poppler Error: {e}")
+
+    # Test Image OCR
+    try:
+        img = Image.new('RGB', (100, 30), color = (255, 255, 255))
+        d = ImageDraw.Draw(img)
+        # Default font might be missing or small, but usually works
+        d.text((10,10), "HOLA", fill=(0,0,0))
+        
+        UPLOAD_DIR = os.path.abspath("backend/uploads")
+        if not os.path.exists(UPLOAD_DIR):
+             os.makedirs(UPLOAD_DIR)
+        img_path = os.path.join(UPLOAD_DIR, "debug_ocr.png")
+        img.save(img_path)
+        
+        text = pytesseract.image_to_string(Image.open(img_path))
+        logs.append(f"Image OCR Result: {text.strip()}")
+    except Exception as e:
+        logs.append(f"Image OCR Error: {e}")
+
+    return {"logs": logs}
+
 # --- Auth ---
 
 @app.post("/auth/register", response_model=schemas.User)
@@ -149,31 +195,42 @@ def upload_doc_for_case(
     if not db_case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Guardar archivo localmente
-    file_location = f"backend/uploads/{case_id}_{file.filename}"
+    # Guardar archivo localmente (Absolute path to be safe in Docker)
+    UPLOAD_DIR = os.path.abspath("backend/uploads")
+    if not os.path.exists(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR)
+        
+    file_location = os.path.join(UPLOAD_DIR, f"{case_id}_{file.filename}")
+    
+    # Use 'wb' mode and shutil to save upload file
+    # Important: Reset file cursor if it was read before
+    file.file.seek(0)
     with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # URL accesible (en prod sería S3 URL)
-    file_url = f"http://localhost:8000/uploads/{case_id}_{file.filename}"
+    # URL accesible (en prod sería S3 URL o CDN)
+    # Using relative path for URL if possible, or env var
+    # For now keep localhost but client should use relative
+    file_url = f"/uploads/{case_id}_{file.filename}"
 
     # Crear registro en BD
     db_doc = models.Doc(
         case_id=case_id,
         type=type,
         file_url=file_url,
-        status=models.DocStatus.UPLOADED, # Se asume cargado al subir
+        status=models.DocStatus.UPLOADED, 
         is_verified=False
     )
     db.add(db_doc)
     db.commit()
     db.refresh(db_doc)
 
-    # Simular Extracción OCR
-    # Para el MVP, ejecutamos OCR en todos los docs subidos para ver logs, pero solo procesamos lógica específica en algunos
+    # Extracción OCR
     try:
-        # Pasamos la ruta local del archivo (file_location) en lugar de la URL para que Tesseract pueda leerlo
+        print(f"OCR: Iniciando análisis de {file_location} (Tipo: {type})")
         extracted = analyze_document(file_location, type)
+        print(f"OCR: Datos extraídos: {extracted}")
+
         
         if type == models.DocType.DEATH_CERTIFICATE:
             if "date_of_death" in extracted:
