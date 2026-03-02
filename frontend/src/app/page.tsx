@@ -29,6 +29,9 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
+    // Debug info
+    console.log('Current API URL:', process.env.NEXT_PUBLIC_API_URL);
+    
     setIsMounted(true);
     if (!token && !localStorage.getItem('token')) {
         router.push('/login');

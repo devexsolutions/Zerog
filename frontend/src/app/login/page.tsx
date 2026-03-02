@@ -17,6 +17,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    console.log('Login attempt using API:', apiUrl);
+
     try {
       const formData = new FormData();
       formData.append('username', email);
