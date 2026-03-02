@@ -177,28 +177,32 @@ def upload_doc_for_case(
         
         if type == models.DocType.DEATH_CERTIFICATE:
             if "date_of_death" in extracted:
-                if not db_case.date_of_death:
-                    db_case.date_of_death = datetime.fromisoformat(extracted["date_of_death"])
-                    print(f"OCR: Fecha de defunción actualizada para el caso {case_id}")
+                # Actualizar siempre para DEMO, aunque ya exista valor
+                old_date = db_case.date_of_death
+                db_case.date_of_death = datetime.fromisoformat(extracted["date_of_death"])
+                print(f"OCR: Fecha de defunción actualizada: {old_date} -> {db_case.date_of_death}")
             
             if "deceased_name" in extracted:
-                if not db_case.deceased_name:
-                    db_case.deceased_name = extracted["deceased_name"]
-                    print(f"OCR: Nombre del fallecido actualizado: {extracted['deceased_name']}")
+                # Actualizar siempre para DEMO
+                old_name = db_case.deceased_name
+                db_case.deceased_name = extracted["deceased_name"]
+                print(f"OCR: Nombre del fallecido actualizado: {old_name} -> {extracted['deceased_name']}")
             
             if "dni" in extracted:
-                if not db_case.deceased_dni:
-                    db_case.deceased_dni = extracted["dni"]
-                    print(f"OCR: DNI del fallecido actualizado: {extracted['dni']}")
+                # Actualizar siempre para DEMO
+                old_dni = db_case.deceased_dni
+                db_case.deceased_dni = extracted["dni"]
+                print(f"OCR: DNI del fallecido actualizado: {old_dni} -> {extracted['dni']}")
 
             db.commit()
         
         elif type == models.DocType.DNI:
             if "dni" in extracted:
-                if not db_case.deceased_dni:
-                    db_case.deceased_dni = extracted["dni"]
-                    db.commit()
-                    print(f"OCR: DNI del fallecido actualizado desde documento DNI: {extracted['dni']}")
+                # Actualizar siempre para DEMO
+                old_dni = db_case.deceased_dni
+                db_case.deceased_dni = extracted["dni"]
+                db.commit()
+                print(f"OCR: DNI del fallecido actualizado desde DNI: {old_dni} -> {extracted['dni']}")
         
         elif type == models.DocType.BANK_CERTIFICATE:
             # Si encontramos IBAN y saldo, creamos un Asset automáticamente
