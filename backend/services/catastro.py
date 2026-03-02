@@ -9,6 +9,9 @@ class CatastroService:
         """
         Consulta datos de un inmueble por Referencia Catastral usando Consulta_DNPRC.
         """
+        # Limpiar referencia de espacios, guiones y caracteres no alfanuméricos
+        ref_catastral = "".join(filter(str.isalnum, ref_catastral)).upper()
+        
         url = f"{CatastroService.BASE_URL}/Consulta_DNPRC"
         params = {
             "Provincia": "",
