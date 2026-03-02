@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { ArrowLeft, Upload, CheckCircle, AlertCircle, Clock, FileText, Calculator, Landmark, Download, Users, Search, Plus, MapPin } from 'lucide-react';
+import { ArrowLeft, Upload, CheckCircle, AlertCircle, Clock, FileText, Calculator, Landmark, Download, Users, Search, Plus, MapPin, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -59,6 +59,15 @@ interface Asset {
   reference_value?: number;
 }
 
+interface CatastroData {
+  reference: string;
+  address: string;
+  surface: string;
+  usage: string;
+  construction_year?: number;
+  urban?: boolean;
+}
+
 interface DistributionResult {
   estate_summary: Calculation;
   heirs_distribution: HeirDistribution[];
@@ -78,7 +87,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [catastroRef, setCatastroRef] = useState('');
-  const [catastroData, setCatastroData] = useState<any>(null);
+  const [catastroData, setCatastroData] = useState<CatastroData | null>(null);
   const [searchingCatastro, setSearchingCatastro] = useState(false);
   const [marketValue, setMarketValue] = useState(0);
   const [referenceValue, setReferenceValue] = useState(0);
@@ -258,10 +267,16 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const handleAddProperty = async () => {
       if (!catastroData) return;
 
+      // Validación: al menos uno de los valores debe ser mayor que 0
+      if (marketValue <= 0 && referenceValue <= 0) {
+          alert("Por favor, introduce al menos un valor: Valor de Mercado o Valor de Referencia");
+          return;
+      }
+
       try {
           const newAsset = {
               type: "inmueble", 
-              value: marketValue > 0 ? marketValue : referenceValue, // Default to Market Value, else Reference Value
+              value: marketValue > 0 ? marketValue : referenceValue, // Usar valor de mercado si existe, sino referencia
               description: `Inmueble Catastro: ${catastroData.address}`,
               cadastral_reference: catastroData.reference,
               address: catastroData.address,
@@ -296,6 +311,32 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       } catch (e) {
           console.error(e);
           alert("Error de conexión al guardar el inmueble");
+      }
+  };
+
+  const handleDeleteAsset = async (assetId: number) => {
+      if (!confirm("¿Estás seguro de que quieres eliminar este bien del inventario?")) {
+          return;
+      }
+
+      try {
+          const res = await fetch(`${API_URL}/cases/${caseId}/assets/${assetId}`, {
+              method: 'DELETE',
+              headers: {
+                  'Authorization': `Bearer ${token}`
+              }
+          });
+
+          if (res.ok) {
+              alert("Bien eliminado del inventario correctamente");
+              fetchData(); // Recargar la lista de assets
+          } else {
+              const error = await res.json();
+              alert(`Error al eliminar bien: ${error.detail || 'Error desconocido'}`);
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Error de conexión al eliminar el bien");
       }
   };
 
@@ -464,6 +505,89 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                             </div>
                         </div>
                     ))}
+                </div>
+            </section>
+
+            {/* Inventario de Bienes */}
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <Calculator size={20} className="text-gray-700" /> Inventario de Bienes
+                    </h3>
+                </div>
+                <div className="p-6">
+                    {assets.length === 0 ? (
+                        <div className="text-center py-8">
+                            <Calculator className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <h3 className="text-sm font-medium text-gray-900 mb-2">No hay bienes registrados</h3>
+                            <p className="text-sm text-gray-500">Utiliza la sección de Catastro arriba para añadir inmuebles al inventario.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {assets.map((asset) => (
+                                    <div key={asset.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 hover:shadow-md transition-shadow">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                                                {asset.type}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg font-semibold text-gray-900">
+                                                    {asset.value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                </span>
+                                                <button
+                                                    onClick={() => handleDeleteAsset(asset.id)}
+                                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                                    title="Eliminar bien"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <h4 className="font-medium text-gray-900 mb-2">
+                                            {asset.description || 'Sin descripción'}
+                                        </h4>
+                                        {asset.address && (
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                <MapPin size={14} className="inline mr-1" />
+                                                {asset.address}
+                                            </p>
+                                        )}
+                                        <div className="space-y-1 text-sm">
+                                            {asset.cadastral_reference && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Referencia:</span> {asset.cadastral_reference}
+                                                </p>
+                                            )}
+                                            {asset.surface && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Superficie:</span> {asset.surface} m²
+                                                </p>
+                                            )}
+                                            {asset.usage && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Uso:</span> {asset.usage}
+                                                </p>
+                                            )}
+                                            {asset.reference_value && asset.reference_value > 0 && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Valor de referencia:</span> {asset.reference_value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-blue-900">Total del Inventario:</span>
+                                    <span className="text-lg font-bold text-blue-900">
+                                        {assets.reduce((sum, asset) => sum + asset.value, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </section>
         </div>
@@ -665,84 +789,6 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                     <Plus size={18} />
                                     Añadir al Inventario
                                 </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </section>
-
-            {/* Inventario de Bienes */}
-            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-6">
-                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                        <Calculator size={20} className="text-gray-700" /> Inventario de Bienes
-                    </h3>
-                </div>
-                <div className="p-6">
-                    {assets.length === 0 ? (
-                        <div className="text-center py-8">
-                            <Calculator className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <h3 className="text-sm font-medium text-gray-900 mb-2">No hay bienes registrados</h3>
-                            <p className="text-sm text-gray-500">Utiliza la sección de Catastro arriba para añadir inmuebles al inventario.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {assets.map((asset) => (
-                                    <div key={asset.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-                                                {asset.type}
-                                            </span>
-                                            <span className="text-lg font-semibold text-gray-900">
-                                                {asset.value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                            </span>
-                                        </div>
-                                        
-                                        <h4 className="font-medium text-gray-900 mb-2">
-                                            {asset.description || 'Sin descripción'}
-                                        </h4>
-                                        
-                                        {asset.address && (
-                                            <p className="text-sm text-gray-600 mb-2">
-                                                <MapPin size={14} className="inline mr-1" />
-                                                {asset.address}
-                                            </p>
-                                        )}
-                                        
-                                        <div className="space-y-1 text-sm">
-                                            {asset.cadastral_reference && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Referencia:</span> {asset.cadastral_reference}
-                                                </p>
-                                            )}
-                                            {asset.surface && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Superficie:</span> {asset.surface} m²
-                                                </p>
-                                            )}
-                                            {asset.usage && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Uso:</span> {asset.usage}
-                                                </p>
-                                            )}
-                                            {asset.reference_value && asset.reference_value > 0 && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Valor de referencia:</span> {asset.reference_value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-blue-900">Total del Inventario:</span>
-                                    <span className="text-lg font-bold text-blue-900">
-                                        {assets.reduce((sum, asset) => sum + asset.value, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                    </span>
-                                </div>
                             </div>
                         </div>
                     )}
