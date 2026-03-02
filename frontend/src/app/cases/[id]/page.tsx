@@ -44,6 +44,21 @@ interface HeirDistribution {
   total_to_pay: number;
 }
 
+interface Asset {
+  id: number;
+  type: string;
+  value: number;
+  is_ganancial: boolean;
+  is_debt: boolean;
+  is_funeral_expense: boolean;
+  description?: string;
+  cadastral_reference?: string;
+  address?: string;
+  surface?: number;
+  usage?: string;
+  reference_value?: number;
+}
+
 interface DistributionResult {
   estate_summary: Calculation;
   heirs_distribution: HeirDistribution[];
@@ -67,6 +82,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const [searchingCatastro, setSearchingCatastro] = useState(false);
   const [marketValue, setMarketValue] = useState(0);
   const [referenceValue, setReferenceValue] = useState(0);
+  const [assets, setAssets] = useState<Asset[]>([]);
   
   const { token, logout } = useAuth();
   const router = useRouter();
@@ -87,14 +103,15 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
         'Authorization': `Bearer ${token}`
       };
       
-      const [caseRes, checkRes, calcRes, distRes] = await Promise.all([
+      const [caseRes, checkRes, calcRes, distRes, assetsRes] = await Promise.all([
         fetch(`${API_URL}/cases/${caseId}`, { headers }),
         fetch(`${API_URL}/cases/${caseId}/checklist`, { headers }),
         fetch(`${API_URL}/cases/${caseId}/calculate`, { headers }),
-        fetch(`${API_URL}/cases/${caseId}/distribution`, { headers })
+        fetch(`${API_URL}/cases/${caseId}/distribution`, { headers }),
+        fetch(`${API_URL}/cases/${caseId}/assets/`, { headers })
       ]);
 
-      if (caseRes.status === 401 || checkRes.status === 401 || calcRes.status === 401) {
+      if (caseRes.status === 401 || checkRes.status === 401 || calcRes.status === 401 || assetsRes.status === 401) {
           logout();
           return;
       }
@@ -103,6 +120,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       if (checkRes.ok) setChecklist(await checkRes.json());
       if (calcRes.ok) setCalculation(await calcRes.json());
       if (distRes.ok) setDistribution(await distRes.json());
+      if (assetsRes.ok) setAssets(await assetsRes.json());
     } catch (error) {
       console.error(error);
     } finally {
@@ -647,6 +665,84 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                     <Plus size={18} />
                                     Añadir al Inventario
                                 </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </section>
+
+            {/* Inventario de Bienes */}
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-6">
+                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <Calculator size={20} className="text-gray-700" /> Inventario de Bienes
+                    </h3>
+                </div>
+                <div className="p-6">
+                    {assets.length === 0 ? (
+                        <div className="text-center py-8">
+                            <Calculator className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <h3 className="text-sm font-medium text-gray-900 mb-2">No hay bienes registrados</h3>
+                            <p className="text-sm text-gray-500">Utiliza la sección de Catastro arriba para añadir inmuebles al inventario.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {assets.map((asset) => (
+                                    <div key={asset.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                                                {asset.type}
+                                            </span>
+                                            <span className="text-lg font-semibold text-gray-900">
+                                                {asset.value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                            </span>
+                                        </div>
+                                        
+                                        <h4 className="font-medium text-gray-900 mb-2">
+                                            {asset.description || 'Sin descripción'}
+                                        </h4>
+                                        
+                                        {asset.address && (
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                <MapPin size={14} className="inline mr-1" />
+                                                {asset.address}
+                                            </p>
+                                        )}
+                                        
+                                        <div className="space-y-1 text-sm">
+                                            {asset.cadastral_reference && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Referencia:</span> {asset.cadastral_reference}
+                                                </p>
+                                            )}
+                                            {asset.surface && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Superficie:</span> {asset.surface} m²
+                                                </p>
+                                            )}
+                                            {asset.usage && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Uso:</span> {asset.usage}
+                                                </p>
+                                            )}
+                                            {asset.reference_value && asset.reference_value > 0 && (
+                                                <p className="text-gray-600">
+                                                    <span className="font-medium">Valor de referencia:</span> {asset.reference_value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-blue-900">Total del Inventario:</span>
+                                    <span className="text-lg font-bold text-blue-900">
+                                        {assets.reduce((sum, asset) => sum + asset.value, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     )}
