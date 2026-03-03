@@ -183,7 +183,7 @@ def read_assets(case_id: int, db: Session = Depends(get_db), current_user: model
     return db_case.assets
 
 # --- Docs ---
-@app.post("/cases/{case_id}/upload-doc/", response_model=schemas.Doc)
+@app.post("/cases/{case_id}/upload-doc/", response_model=schemas.DocUploadResponse)
 def upload_doc_for_case(
     case_id: int, 
     file: UploadFile = File(...), 
@@ -224,6 +224,11 @@ def upload_doc_for_case(
     db.add(db_doc)
     db.commit()
     db.refresh(db_doc)
+
+    # Variables para contar activos creados y referencias encontradas
+    assets_created = 0
+    cadastral_references_found = 0
+    processing_message = ""
 
     # Extracción OCR
     try:
@@ -283,11 +288,88 @@ def upload_doc_for_case(
                     db.add(new_asset)
                     db.commit()
                     print(f"OCR: Activo bancario creado automáticamente: {description} - {extracted['amount']}€")
+        
+        elif type == models.DocType.TESTAMENT:
+            # Procesar referencias catastrales encontradas en el testamento
+            if "cadastral_references" in extracted and extracted["cadastral_references"]:
+                cadastral_references_found = len(extracted["cadastral_references"])
+                print(f"OCR: Procesando {cadastral_references_found} referencias catastrales")
+                
+                for ref in extracted["cadastral_references"]:
+                    try:
+                        # Verificar si ya existe un activo con esta referencia catastral
+                        existing_asset = db.query(models.Asset).filter(
+                            models.Asset.case_id == case_id,
+                            models.Asset.cadastral_reference == ref
+                        ).first()
+                        
+                        if existing_asset:
+                            print(f"OCR: Referencia {ref} ya existe en el inventario, saltando...")
+                            continue
+                        
+                        # Obtener datos del catastro
+                        print(f"OCR: Consultando catastro para referencia {ref}")
+                        catastro_data = catastro.CatastroService.get_property_by_ref(ref)
+                        
+                        if catastro_data:
+                            # Intentar obtener el valor de referencia
+                            reference_value = 0
+                            try:
+                                value_data = catastro.CatastroService.get_reference_value_url(ref)
+                                # Si hay un valor disponible, usarlo
+                                if isinstance(value_data, dict) and 'value' in value_data:
+                                    reference_value = value_data['value']
+                                elif isinstance(value_data, (int, float)):
+                                    reference_value = float(value_data)
+                            except Exception as value_error:
+                                print(f"OCR: No se pudo obtener valor para {ref}: {value_error}")
+                            
+                            # Crear el activo con los datos obtenidos
+                            new_asset = models.Asset(
+                                case_id=case_id,
+                                type=models.AssetType.REAL_ESTATE,
+                                value=reference_value or 0,  # Usar valor de referencia o 0 como fallback
+                                description=f"Inmueble extraído OCR: {catastro_data.get('address', 'Dirección no disponible')}",
+                                cadastral_reference=ref,
+                                address=catastro_data.get('address'),
+                                surface=catastro_data.get('surface'),
+                                usage=catastro_data.get('usage'),
+                                reference_value=reference_value,
+                                is_ganancial=False,
+                                is_debt=False
+                            )
+                            
+                            db.add(new_asset)
+                            db.commit()
+                            assets_created += 1
+                            print(f"OCR: Inmueble añadido automáticamente: {ref} - {catastro_data.get('address', 'Dirección no disponible')}")
+                        else:
+                            print(f"OCR: No se encontraron datos para la referencia {ref}")
+                            
+                    except Exception as e:
+                        print(f"OCR: Error procesando referencia {ref}: {e}")
+                        # Continuar con la siguiente referencia
+                        continue
+                
+                # Crear mensaje de procesamiento para testamentos
+                if cadastral_references_found > 0:
+                    if assets_created > 0:
+                        processing_message = f"Se encontraron {cadastral_references_found} referencias catastrales y se crearon {assets_created} bienes automáticamente."
+                    else:
+                        processing_message = f"Se encontraron {cadastral_references_found} referencias catastrales, pero no se pudieron crear bienes (ya existían o no se encontraron datos)."
+                else:
+                    processing_message = "No se encontraron referencias catastrales en el testamento."
 
     except Exception as e:
         print(f"Error procesando OCR: {e}")
 
-    return db_doc
+    # Devolver respuesta con información de procesamiento
+    return schemas.DocUploadResponse(
+        document=db_doc,
+        assets_created=assets_created,
+        cadastral_references_found=cadastral_references_found,
+        message=processing_message
+    )
 
 # --- Advanced Features ---
 

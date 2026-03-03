@@ -251,6 +251,13 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       });
 
       if (res.ok) {
+        const result = await res.json();
+        
+        // Mostrar mensaje de procesamiento si existe (para testamentos)
+        if (result.message) {
+          alert(result.message);
+        }
+        
         // Recargar datos para actualizar estado y cálculos (si OCR funcionó)
         fetchData();
       } else {

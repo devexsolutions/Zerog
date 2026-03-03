@@ -139,5 +139,35 @@ def analyze_document(file_path: str, doc_type: str):
              heirs.append({"name": "Cónyuge (Mencionado)", "relationship": "Cónyuge"})
         
         extracted_data["heirs_found"] = heirs
+        
+        # Buscar referencias catastrales (formato: 14 caracteres alfanuméricos)
+        # Patrones comunes: "ref. catastral", "referencia catastral", directamente el código
+        cadastral_refs = []
+        
+        # Patrón para referencias catastrales de 14 caracteres (letras y números)
+        ref_pattern = r'\b[A-HJ-NP-TV-Z0-9]{14}\b'
+        
+        # Buscar todas las coincidencias
+        matches = re.findall(ref_pattern, raw_text.upper())
+        
+        # Filtrar para asegurar que son referencias válidas (no palabras comunes)
+        for match in matches:
+            # Verificar que no sea una palabra común de 14 letras
+            if not match.isalpha() or match not in ['ADMINISTRACION', 'CONSTITUCION', 'REPRESENTACION']:
+                cadastral_refs.append(match)
+        
+        # También buscar con contexto de texto
+        context_pattern = r'(?:referencia\s+catastral|ref\.?\s*catastral|catastro)[\s:]*([A-HJ-NP-TV-Z0-9]{14})'
+        context_matches = re.findall(context_pattern, raw_text, re.IGNORECASE)
+        cadastral_refs.extend(context_matches)
+        
+        # Eliminar duplicados
+        cadastral_refs = list(set(cadastral_refs))
+        
+        if cadastral_refs:
+            extracted_data["cadastral_references"] = cadastral_refs
+            print(f"Referencias catastrales encontradas: {cadastral_refs}")
+        else:
+            print("No se encontraron referencias catastrales en el testamento")
 
     return extracted_data

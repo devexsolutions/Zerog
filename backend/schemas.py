@@ -64,6 +64,15 @@ class Doc(DocBase):
     class Config:
         orm_mode = True
 
+class DocUploadResponse(BaseModel):
+    document: Doc
+    assets_created: int = 0
+    cadastral_references_found: int = 0
+    message: str = ""
+
+    class Config:
+        orm_mode = True
+
 # --- Case Schemas ---
 class CaseBase(BaseModel):
     user_id: str
