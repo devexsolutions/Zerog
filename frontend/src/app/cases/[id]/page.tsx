@@ -6,6 +6,100 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
+// Funciones auxiliares para formato de moneda española
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+};
+
+const parseCurrency = (value: string): number => {
+  // Eliminar símbolo de euro y espacios
+  let cleanValue = value.replace(/[€\s]/g, '');
+  
+  // Si tiene punto como separador decimal (formato español)
+  if (cleanValue.includes(',') && cleanValue.includes('.')) {
+    // Eliminar puntos de miles y cambiar coma por punto decimal
+    cleanValue = cleanValue.replace(/\./g, '').replace(',', '.');
+  } else if (cleanValue.includes(',')) {
+    // Solo tiene coma, es el separador decimal
+    cleanValue = cleanValue.replace(',', '.');
+  }
+  
+  return parseFloat(cleanValue) || 0;
+};
+
+const formatNumberInput = (value: string): string => {
+  // Permitir solo números, puntos y comas
+  const cleanValue = value.replace(/[^0-9.,]/g, '');
+  
+  // Si hay múltiples puntos o comas, mantener solo el último
+  const parts = cleanValue.split(/[.,]/);
+  if (parts.length > 2) {
+    const decimalSeparator = cleanValue.includes(',') ? ',' : '.';
+    return parts.slice(0, -1).join('') + decimalSeparator + parts[parts.length - 1];
+  }
+  
+  return cleanValue;
+};
+
+// Componente de input de moneda española
+const CurrencyInput = ({ 
+  value, 
+  onValueChange, 
+  placeholder = "0,00 €",
+  className = ""
+}: { 
+  value: number; 
+  onValueChange: (value: number) => void; 
+  placeholder?: string;
+  className?: string;
+}) => {
+  const [displayValue, setDisplayValue] = useState(formatCurrency(value));
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState("");
+
+  const handleFocus = () => {
+    setIsEditing(true);
+    setTempValue(value === 0 ? "" : value.toString().replace(".", ","));
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    const parsedValue = parseCurrency(tempValue);
+    onValueChange(parsedValue);
+    setDisplayValue(formatCurrency(parsedValue));
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatNumberInput(e.target.value);
+    setTempValue(formatted);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={isEditing ? tempValue : displayValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={`${className} ${isEditing ? 'text-left' : 'text-right'}`}
+      style={{ fontVariantNumeric: 'tabular-nums' }}
+    />
+  );
+};
+
 interface Case {
   id: number;
   user_id: string;
@@ -246,12 +340,30 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
     setSearchingCatastro(true);
     setCatastroData(null);
     try {
+        // Primero obtener los datos básicos del catastro
         const res = await fetch(`${API_URL}/integrations/catastro/${catastroRef}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
             const data = await res.json();
             setCatastroData(data);
+            
+            // Intentar obtener el valor de referencia automáticamente
+            try {
+                const valueRes = await fetch(`${API_URL}/integrations/catastro/value/${catastroRef}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (valueRes.ok) {
+                    const valueData = await valueRes.json();
+                    // Si hay un valor disponible, establecerlo automáticamente
+                    if (valueData.value && valueData.value > 0) {
+                        setReferenceValue(valueData.value);
+                    }
+                }
+            } catch (valueError) {
+                console.warn("No se pudo obtener el valor automáticamente:", valueError);
+                // No mostrar error al usuario, solo continuar sin valor automático
+            }
         } else {
             const error = await res.json();
             alert(`Error: ${error.detail}`);
@@ -652,20 +764,20 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Heredero</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parentesco</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">%</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cuota Hereditaria</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Base Imponible</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Impuesto (Est.)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Heredero</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Parentesco</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">%</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Cuota Hereditaria</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Base Imponible</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Impuesto (Est.)</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {distribution.heirs_distribution.map((heir) => (
                                     <tr key={heir.heir_id}>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{heir.name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{heir.relationship}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{heir.share_percentage}%</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{heir.relationship}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{heir.share_percentage}%</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{heir.quota_value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                                             {heir.tax_base.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
@@ -719,20 +831,20 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Dirección</span>
+                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Dirección</span>
                                     <p className="text-gray-900 font-medium">{catastroData.address}</p>
                                 </div>
                                 <div>
-                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Uso Principal</span>
+                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Uso Principal</span>
                                     <p className="text-gray-900">{catastroData.usage || 'Desconocido'}</p>
                                 </div>
                                 <div>
-                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Superficie</span>
+                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Superficie</span>
                                     <p className="text-gray-900">{catastroData.surface} m²</p>
                                 </div>
                                 <div>
-                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Referencia</span>
-                                    <p className="font-mono text-gray-700">{catastroData.reference}</p>
+                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Referencia</span>
+                                    <p className="font-mono text-gray-800">{catastroData.reference}</p>
                                 </div>
                             </div>
 
@@ -742,12 +854,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                         Valor de Referencia (Base Imponible)
                                     </label>
                                     <div className="flex gap-2 items-center">
-                                        <input
-                                            type="number"
+                                        <CurrencyInput
                                             value={referenceValue}
-                                            onChange={(e) => setReferenceValue(Number(e.target.value))}
+                                            onValueChange={setReferenceValue}
+                                            placeholder="0,00 €"
                                             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                                            placeholder="0.00"
                                         />
                                         <a 
                                             href="https://www1.sedecatastro.gob.es/Accesos/SECAccvr.aspx" 
@@ -768,12 +879,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Valor de Mercado (Estimado)
                                     </label>
-                                    <input
-                                        type="number"
+                                    <CurrencyInput
                                         value={marketValue}
-                                        onChange={(e) => setMarketValue(Number(e.target.value))}
+                                        onValueChange={setMarketValue}
+                                        placeholder="0,00 €"
                                         className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                                        placeholder="0.00"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
                                         Si es mayor al de referencia, se usará este.
