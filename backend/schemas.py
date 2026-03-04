@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 from models import CaseStatus, DocStatus, DocType, AssetType
@@ -69,6 +69,7 @@ class DocUploadResponse(BaseModel):
     assets_created: int = 0
     cadastral_references_found: int = 0
     message: str = ""
+    ai_data: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
