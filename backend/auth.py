@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from . import models, schemas
-from .database import get_db
+import models, schemas
+from database import get_db
 
 # Configuración JWT
 SECRET_KEY = "tu_clave_secreta_super_segura_para_mvp" # En prod usar env var

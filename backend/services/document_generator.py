@@ -4,8 +4,8 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from io import BytesIO
-from . import distribution
-from .. import models
+import services.distribution as distribution
+import models
 
 def generate_pdf_report(case: models.Case) -> BytesIO:
     """

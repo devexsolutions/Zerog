@@ -1,7 +1,7 @@
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime, Enum
 from sqlalchemy.orm import relationship
 import enum
-from .database import Base
+from database import Base
 from datetime import datetime
 
 class CaseStatus(str, enum.Enum):
