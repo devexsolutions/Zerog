@@ -187,9 +187,13 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const [referenceValue, setReferenceValue] = useState(0);
   const [assets, setAssets] = useState<Asset[]>([]);
   
+  // Estados para el progreso de carga de testamentos
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+  const [processingStatus, setProcessingStatus] = useState<{[key: string]: string}>({});
+  
   const { token, logout } = useAuth();
   const router = useRouter();
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
   useEffect(() => {
     setIsMounted(true);
@@ -237,11 +241,24 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
         // En un caso real, el backend valida. Aquí solo para demo visual inmediata.
     }
 
+    // Inicializar progreso para este tipo de documento
+    setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
+    setProcessingStatus(prev => ({ ...prev, [docType]: 'Subiendo archivo...' }));
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', docType);
 
     try {
+      // Simular progreso de subida
+      const uploadInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          const current = prev[docType] || 0;
+          const newProgress = Math.min(current + 10, 90);
+          return { ...prev, [docType]: newProgress };
+        });
+      }, 200);
+
       const res = await fetch(`${API_URL}/cases/${caseId}/upload-doc/`, {
         method: 'POST',
         headers: {
@@ -250,21 +267,52 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
         body: formData,
       });
 
+      clearInterval(uploadInterval);
+      setUploadProgress(prev => ({ ...prev, [docType]: 100 }));
+
       if (res.ok) {
         const result = await res.json();
         
         // Mostrar mensaje de procesamiento si existe (para testamentos)
         if (result.message) {
-          alert(result.message);
+          // Si es un testamento, mostrar progreso de procesamiento basado en la respuesta real
+          if (docType === 'testamento') {
+            setProcessingStatus(prev => ({ ...prev, [docType]: result.message }));
+            
+            // Mostrar información detallada sobre el procesamiento
+            if (result.cadastral_references_found > 0) {
+              setTimeout(() => {
+                if (result.assets_created > 0) {
+                  setProcessingStatus(prev => ({ ...prev, [docType]: `✅ Se crearon ${result.assets_created} bienes automáticamente` }));
+                } else {
+                  setProcessingStatus(prev => ({ ...prev, [docType]: 'ℹ️ Las referencias ya existen en el inventario' }));
+                }
+                
+                setTimeout(() => {
+                  setProcessingStatus(prev => ({ ...prev, [docType]: '' }));
+                  setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
+                }, 3000);
+              }, 2000);
+            } else {
+              setTimeout(() => {
+                setProcessingStatus(prev => ({ ...prev, [docType]: '' }));
+                setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
+              }, 2000);
+            }
+          }
         }
         
         // Recargar datos para actualizar estado y cálculos (si OCR funcionó)
         fetchData();
       } else {
+        setProcessingStatus(prev => ({ ...prev, [docType]: '❌ Error al subir documento' }));
+        setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
         alert("Error subiendo documento");
       }
     } catch (error) {
       console.error(error);
+      setProcessingStatus(prev => ({ ...prev, [docType]: '❌ Error de conexión' }));
+      setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
       alert("Error de conexión");
     }
   };
@@ -601,7 +649,20 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                 </div>
                             </div>
                             <div>
-                                {item.status === 'MISSING' || item.status === 'PENDING' || item.status === 'PENDIENTE' ? (
+                                {/* Barra de progreso y estado de procesamiento */}
+                                {uploadProgress[item.type] ? (
+                                    <div className="flex flex-col items-end gap-2 min-w-[200px]">
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div 
+                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                                style={{ width: `${uploadProgress[item.type]}%` }}
+                                            ></div>
+                                        </div>
+                                        <span className="text-xs text-gray-600">
+                                            {processingStatus[item.type] || 'Subiendo...'}
+                                        </span>
+                                    </div>
+                                ) : item.status === 'MISSING' || item.status === 'PENDING' || item.status === 'PENDIENTE' ? (
                                     <label className="flex items-center gap-1 text-sm text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded border border-blue-200 cursor-pointer">
                                         <Upload size={14} /> Subir
                                         <input 

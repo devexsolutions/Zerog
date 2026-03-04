@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 from io import BytesIO
-from .. import models
-from . import distribution
+import models
+import services.distribution as distribution
 
 def generate_model_650_xml(case: models.Case) -> BytesIO:
     """

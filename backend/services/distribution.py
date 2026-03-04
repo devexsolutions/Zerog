@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
-from .. import models
-from . import calculator
+import models
+import services.calculator as calculator
 
 def calculate_distribution(case: models.Case) -> Dict[str, Any]:
     """

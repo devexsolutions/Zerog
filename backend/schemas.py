@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
-from .models import CaseStatus, DocStatus, DocType, AssetType
+from models import CaseStatus, DocStatus, DocType, AssetType
 
 # --- Heir Schemas ---
 class HeirBase(BaseModel):
@@ -21,7 +21,7 @@ class Heir(HeirBase):
     relationship_degree: Optional[str] = None # Added to map from DB model
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Asset Schemas ---
 class AssetBase(BaseModel):
@@ -45,7 +45,7 @@ class Asset(AssetBase):
     case_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Doc Schemas ---
 class DocBase(BaseModel):
@@ -62,7 +62,7 @@ class Doc(DocBase):
     case_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DocUploadResponse(BaseModel):
     document: Doc
@@ -71,7 +71,7 @@ class DocUploadResponse(BaseModel):
     message: str = ""
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Case Schemas ---
 class CaseBase(BaseModel):
@@ -94,7 +94,7 @@ class Case(CaseBase):
     docs: List[Doc] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Auth Schemas ---
 class Token(BaseModel):
@@ -114,7 +114,7 @@ class User(BaseModel):
     is_active: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Calculation Schemas ---
 class CalculationResult(BaseModel):

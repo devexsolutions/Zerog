@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from .. import models
+import models
 
 def calculate_estate(case: models.Case) -> Dict[str, Any]:
     """

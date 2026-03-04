@@ -12,6 +12,7 @@ class CatastroService:
         # Limpiar referencia de espacios, guiones y caracteres no alfanuméricos
         ref_catastral = "".join(filter(str.isalnum, ref_catastral)).upper()
         
+        # Corrección: Endpoint correcto para consulta por RC
         url = f"{CatastroService.BASE_URL}/Consulta_DNPRC"
         params = {
             "Provincia": "",
@@ -20,6 +21,7 @@ class CatastroService:
         }
         
         try:
+            print(f"Consultando Catastro: {url} con RC={ref_catastral}")
             response = requests.get(url, params=params)
             response.raise_for_status()
             
@@ -31,16 +33,13 @@ class CatastroService:
             root = data.get('consulta_dnp') or data.get('consulta_dnprc')
             
             if not root:
-                 return {"error": "Respuesta inesperada de Catastro", "raw": data}
+                 return None # No se pudo parsear respuesta esperada
 
             if 'lerr' in root:
                  # Check if lerr has err inside
                  err_info = root['lerr'].get('err', {})
-                 # If err is a list or dict, convert to string safely
-                 return {
-                    "error": f"Error Catastro: {err_info}",
-                    "raw": data
-                }
+                 print(f"Error Catastro para {ref_catastral}: {err_info}")
+                 return None
 
             # Extract relevant info
             # Structure usually: root -> bico -> bi -> (dt, ldt, debi)
@@ -58,7 +57,10 @@ class CatastroService:
                 
                 if isinstance(de, dict):
                      usage = de.get('luso', "")
-                     surface = de.get('sfc', 0)
+                     try:
+                        surface = float(de.get('sfc', 0))
+                     except:
+                        surface = 0
                 
                 return {
                     "reference": ref_catastral,
@@ -69,18 +71,23 @@ class CatastroService:
                     "info_link": "https://www1.sedecatastro.gob.es/Accesos/SECAccvr.aspx"
                 }
             
-            return {"error": "Datos no estructurados como se esperaba", "raw": data}
-
+            return None # Estructura no reconocida
+            
         except Exception as e:
-            return {"error": str(e)}
+            print(f"Excepción consultando Catastro: {e}")
+            return None
 
     @staticmethod
-    def get_reference_value_url(ref_catastral: str, nif: str = None) -> str:
+    def get_reference_value_url(ref_catastral: str, nif: str = None):
         """
-        Devuelve la URL directa para consultar el Valor de Referencia.
-        Actualmente la consulta automatizada requiere certificado digital (Client SSL),
-        por lo que proporcionamos el enlace directo a la Sede Electrónica.
+        Devuelve información sobre el valor de referencia.
+        Como requiere certificado, devolvemos un objeto base.
         """
         # Enlace general a la consulta de valor de referencia
         base_url = "https://www1.sedecatastro.gob.es/Accesos/SECAccvr.aspx"
-        return base_url
+        
+        return {
+            "value": 0, # Valor por defecto ya que no podemos consultarlo sin certificado
+            "url": base_url,
+            "message": "Consultar valor manualmente en Sede Electrónica"
+        }
