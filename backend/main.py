@@ -182,6 +182,30 @@ def read_assets(case_id: int, db: Session = Depends(get_db), current_user: model
         raise HTTPException(status_code=404, detail="Case not found")
     return db_case.assets
 
+@app.put("/cases/{case_id}/assets/{asset_id}", response_model=schemas.Asset)
+def update_asset(
+    case_id: int, 
+    asset_id: int, 
+    asset_update: schemas.AssetUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if db_case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    
+    db_asset = db.query(models.Asset).filter(models.Asset.id == asset_id, models.Asset.case_id == case_id).first()
+    if db_asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    update_data = asset_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_asset, key, value)
+    
+    db.commit()
+    db.refresh(db_asset)
+    return db_asset
+
 # --- Docs ---
 @app.post("/cases/{case_id}/upload-doc/", response_model=schemas.DocUploadResponse)
 def upload_doc_for_case(
@@ -294,6 +318,11 @@ def upload_doc_for_case(
                 print(f"AI+OCR: Referencias catastrales combinadas: {combined_refs}")
 
         
+        # Variables para reportar resultados de la operación
+        created_assets = []
+        failed_references = []
+        
+        # Procesar según tipo de documento
         if type == models.DocType.DEATH_CERTIFICATE:
             if "date_of_death" in extracted:
                 # Actualizar siempre para DEMO, aunque ya exista valor
@@ -345,6 +374,11 @@ def upload_doc_for_case(
                     db.add(new_asset)
                     db.commit()
                     print(f"OCR: Activo bancario creado automáticamente: {description} - {extracted['amount']}€")
+                    created_assets.append({
+                        "description": description,
+                        "value": extracted["amount"],
+                        "type": "bank_account"
+                    })
         
         elif type == models.DocType.TESTAMENT or type == models.DocType.DEED:
             # Procesar referencias catastrales encontradas en el testamento o escritura
@@ -367,7 +401,11 @@ def upload_doc_for_case(
                         
                         # Obtener datos del catastro
                         print(f"OCR: Consultando catastro para referencia {ref}")
-                        catastro_data = catastro.CatastroService.get_property_by_ref(ref)
+                        try:
+                            catastro_data = catastro.CatastroService.get_property_by_ref(ref)
+                        except Exception as e:
+                            print(f"OCR: Error consultando catastro para {ref}: {str(e)}")
+                            catastro_data = {"error": str(e)}
                         
                         if catastro_data and "error" not in catastro_data:
                             # Intentar obtener el valor de referencia
@@ -383,11 +421,12 @@ def upload_doc_for_case(
                                 print(f"OCR: No se pudo obtener valor para {ref}: {value_error}")
                             
                             # Crear el activo con los datos obtenidos
+                            description = f"Inmueble extraído OCR/AI: {catastro_data.get('address', 'Dirección no disponible')}"
                             new_asset = models.Asset(
                                 case_id=case_id,
                                 type=models.AssetType.REAL_ESTATE,
                                 value=reference_value or 0,  # Usar valor de referencia o 0 como fallback
-                                description=f"Inmueble extraído OCR/AI: {catastro_data.get('address', 'Dirección no disponible')}",
+                                description=description,
                                 cadastral_reference=ref,
                                 address=catastro_data.get('address'),
                                 surface=catastro_data.get('surface'),
@@ -399,35 +438,56 @@ def upload_doc_for_case(
                             
                             db.add(new_asset)
                             db.commit()
-                            assets_created += 1
-                            print(f"OCR: Inmueble añadido automáticamente: {ref} - {catastro_data.get('address', 'Dirección no disponible')}")
-                        else:
-                            print(f"OCR: No se encontraron datos válidos para la referencia {ref}")
+                            db.refresh(new_asset)
+                            print(f"OCR: Inmueble creado automáticamente: {ref}")
                             
+                            created_assets.append({
+                                "id": new_asset.id,
+                                "description": description,
+                                "cadastral_reference": ref,
+                                "value": reference_value or 0,
+                                "type": "real_estate"
+                            })
+                        else:
+                            print(f"OCR: Error consultando catastro para {ref}: {catastro_data.get('error', 'Error desconocido')}")
+                            failed_references.append({
+                                "reference": ref,
+                                "error": catastro_data.get("error", "Error desconocido al consultar Catastro")
+                            })
+                    
                     except Exception as e:
-                        print(f"OCR: Error procesando referencia {ref}: {e}")
-                        # Continuar con la siguiente referencia
-                        continue
-                
-                # Crear mensaje de procesamiento para testamentos
-                if cadastral_references_found > 0:
-                    if assets_created > 0:
-                        processing_message = f"Se encontraron {cadastral_references_found} referencias catastrales y se crearon {assets_created} bienes automáticamente."
-                    else:
-                        processing_message = f"Se encontraron {cadastral_references_found} referencias catastrales, pero no se pudieron crear bienes (ya existían o no se encontraron datos)."
-                else:
-                    processing_message = "No se encontraron referencias catastrales en el testamento."
+                        print(f"OCR: Error procesando referencia {ref}: {str(e)}")
+                        failed_references.append({
+                            "reference": ref,
+                            "error": str(e)
+                        })
 
     except Exception as e:
         print(f"Error procesando OCR: {e}")
+        extracted = {} # Asegurar que extracted existe en caso de error
 
-    # Devolver respuesta con información de procesamiento
+    # Construir mensaje de procesamiento
+    message = "Procesamiento completado."
+    if created_assets:
+        message = f"Se han creado {len(created_assets)} nuevos activos automáticamente."
+    
+    if failed_references:
+        message += f" Se encontraron {len(failed_references)} referencias con errores."
+
+    # Calcular total referencias encontradas
+    total_refs_found = 0
+    if extracted and "cadastral_references" in extracted and isinstance(extracted["cadastral_references"], list):
+        total_refs_found = len(extracted["cadastral_references"])
+
     return schemas.DocUploadResponse(
         document=db_doc,
-        assets_created=assets_created,
-        cadastral_references_found=cadastral_references_found,
-        message=processing_message,
-        ai_data=ai_data
+        assets_created=len(created_assets),
+        cadastral_references_found=total_refs_found,
+        message=message,
+        ai_data=ai_data,
+        extracted_data=extracted,
+        created_assets_list=created_assets,
+        failed_references_list=failed_references
     )
 
 # --- Advanced Features ---
