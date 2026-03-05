@@ -330,8 +330,9 @@ def upload_doc_for_case(
                     db.commit()
                     print(f"OCR: Activo bancario creado automáticamente: {description} - {extracted['amount']}€")
         
-        elif type == models.DocType.TESTAMENT:
-            # Procesar referencias catastrales encontradas en el testamento
+        elif type == models.DocType.TESTAMENT or type == models.DocType.DEED:
+            # Procesar referencias catastrales encontradas en el testamento o escritura
+            # Usamos extracted["cadastral_references"] que ya contiene la combinación de OCR y AI
             if "cadastral_references" in extracted and extracted["cadastral_references"]:
                 cadastral_references_found = len(extracted["cadastral_references"])
                 print(f"OCR: Procesando {cadastral_references_found} referencias catastrales")
@@ -352,7 +353,7 @@ def upload_doc_for_case(
                         print(f"OCR: Consultando catastro para referencia {ref}")
                         catastro_data = catastro.CatastroService.get_property_by_ref(ref)
                         
-                        if catastro_data:
+                        if catastro_data and "error" not in catastro_data:
                             # Intentar obtener el valor de referencia
                             reference_value = 0
                             try:
@@ -370,7 +371,7 @@ def upload_doc_for_case(
                                 case_id=case_id,
                                 type=models.AssetType.REAL_ESTATE,
                                 value=reference_value or 0,  # Usar valor de referencia o 0 como fallback
-                                description=f"Inmueble extraído OCR: {catastro_data.get('address', 'Dirección no disponible')}",
+                                description=f"Inmueble extraído OCR/AI: {catastro_data.get('address', 'Dirección no disponible')}",
                                 cadastral_reference=ref,
                                 address=catastro_data.get('address'),
                                 surface=catastro_data.get('surface'),
@@ -385,7 +386,7 @@ def upload_doc_for_case(
                             assets_created += 1
                             print(f"OCR: Inmueble añadido automáticamente: {ref} - {catastro_data.get('address', 'Dirección no disponible')}")
                         else:
-                            print(f"OCR: No se encontraron datos para la referencia {ref}")
+                            print(f"OCR: No se encontraron datos válidos para la referencia {ref}")
                             
                     except Exception as e:
                         print(f"OCR: Error procesando referencia {ref}: {e}")
