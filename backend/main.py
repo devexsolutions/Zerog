@@ -251,16 +251,30 @@ def upload_doc_for_case(
             ai_data = ai_extraction_result
 
             # Merge AI findings with OCR findings (simple strategy for now)
-            if ai_data and "cadastral_references" in ai_data and isinstance(ai_data["cadastral_references"], list):
+            ai_refs = []
+            if ai_data:
+                # Intenta encontrar referencias en diferentes claves posibles que la IA pueda devolver
+                if "cadastral_references" in ai_data and isinstance(ai_data["cadastral_references"], list):
+                     ai_refs = ai_data["cadastral_references"]
+                elif "bienes_inmuebles" in ai_data and isinstance(ai_data["bienes_inmuebles"], list):
+                    # Extraer 'referencia_catastral' de la lista de objetos 'bienes_inmuebles'
+                    for bien in ai_data["bienes_inmuebles"]:
+                        if isinstance(bien, dict) and "referencia_catastral" in bien and bien["referencia_catastral"]:
+                            ai_refs.append(bien["referencia_catastral"])
+            
+            if ai_refs:
                 ocr_refs = extracted.get("cadastral_references") or []
-                ai_refs = ai_data["cadastral_references"]
                 # Normalize and merge unique
                 # Filter both OCR and AI references for validity (length >= 18)
                 valid_ocr = [r for r in ocr_refs if isinstance(r, str) and len(r) >= 18]
                 valid_ai = [r for r in ai_refs if isinstance(r, str) and len(r) >= 18]
                 combined_refs = list(set(valid_ocr + valid_ai))
                 extracted["cadastral_references"] = combined_refs
-                ai_data["cadastral_references"] = combined_refs
+                
+                # Actualizar también ai_data para consistencia si es necesario
+                if ai_data:
+                    ai_data["cadastral_references_normalized"] = combined_refs
+                
                 print(f"AI+OCR: Referencias catastrales combinadas: {combined_refs}")
 
         
