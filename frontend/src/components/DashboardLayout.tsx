@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
   FolderOpen, 
@@ -12,13 +13,19 @@ import {
   Scale, 
   Search,
   Bell,
-  User as UserIcon
+  User as UserIcon,
+  X
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { logout, user } = useAuth();
+  const router = useRouter();
+  const { logout, user, token } = useAuth();
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newCaseUserId, setNewCaseUserId] = useState('');
+  const [creatingCase, setCreatingCase] = useState(false);
 
   // If we are on login or register page, don't show the dashboard layout
   if (pathname === '/login' || pathname === '/register') {
@@ -31,6 +38,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Calendario', icon: Calendar, href: '/calendar' },
     { name: 'Documentos', icon: FileText, href: '/documents' },
   ];
+
+  const handleCreateCase = async () => {
+    if (!newCaseUserId) return;
+    setCreatingCase(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/cases/`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: newCaseUserId, status: 'ABIERTO' }),
+      });
+      
+      if (res.ok) {
+        const newCase = await res.json();
+        setNewCaseUserId('');
+        setIsModalOpen(false);
+        // Navigate to the new case detail page
+        router.push(`/cases/${newCase.id}`);
+      } else {
+        alert('Error al crear el expediente');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error de conexión');
+    } finally {
+      setCreatingCase(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -106,7 +143,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-6 ml-4">
-            <button className="text-white bg-[#1e293b] hover:bg-[#0f172a] px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="text-white bg-[#1e293b] hover:bg-[#0f172a] px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
               <span className="text-lg leading-none">+</span> Nuevo Expediente
             </button>
             
@@ -129,6 +169,51 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      {/* Global New Case Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900">Nuevo Expediente</h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DNI del Cliente / Causante</label>
+                <input
+                  type="text"
+                  placeholder="12345678A"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={newCaseUserId}
+                  onChange={(e) => setNewCaseUserId(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateCase}
+                  disabled={!newCaseUserId || creatingCase}
+                  className="px-4 py-2 bg-[#1e293b] text-white rounded-lg hover:bg-[#0f172a] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {creatingCase ? 'Creando...' : 'Crear Expediente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
