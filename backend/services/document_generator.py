@@ -42,7 +42,7 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
     assets_data = [["Descripción", "Tipo", "Valor (€)"]]
     for asset in case.assets:
         if not asset.is_debt:
-            assets_data.append([asset.description or "Sin descripción", asset.type.value, f"{asset.value:,.2f}"])
+            assets_data.append([asset.description or "Sin descripción", asset.type, f"{asset.value:,.2f}"])
             
     if len(assets_data) > 1:
         t_assets = Table(assets_data, colWidths=[8*cm, 4*cm, 4*cm])
@@ -66,7 +66,7 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
     debts_data = [["Descripción", "Tipo", "Valor (€)"]]
     for asset in case.assets:
         if asset.is_debt:
-            debts_data.append([asset.description or "Sin descripción", asset.type.value, f"{asset.value:,.2f}"])
+            debts_data.append([asset.description or "Sin descripción", asset.type, f"{asset.value:,.2f}"])
             
     if len(debts_data) > 1:
         t_debts = Table(debts_data, colWidths=[8*cm, 4*cm, 4*cm])
