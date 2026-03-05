@@ -1,3 +1,4 @@
+'use client';
 // Componente de prueba para la barra de progreso
 import React, { useState } from 'react';
 
