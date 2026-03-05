@@ -517,6 +517,8 @@ def generate_model_650_xml(case_id: int, db: Session = Depends(get_db), current_
 @app.get("/integrations/catastro/{ref}")
 def get_catastro_data(ref: str, current_user: models.User = Depends(auth.get_current_user)):
     result = catastro.CatastroService.get_property_by_ref(ref)
+    if result is None:
+         raise HTTPException(status_code=404, detail="Referencia catastral no encontrada")
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     return result
