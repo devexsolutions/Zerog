@@ -1039,7 +1039,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                       ))
                     )}
                   </tbody>
-                  {distribution?.heirs_distribution?.length > 0 && (
+                  {distribution && distribution.heirs_distribution && distribution.heirs_distribution.length > 0 && (
                     <tfoot className="bg-gray-50 font-semibold text-gray-900 border-t border-gray-200">
                       <tr>
                         <td colSpan={3} className="px-6 py-4 text-right">TOTALES</td>
