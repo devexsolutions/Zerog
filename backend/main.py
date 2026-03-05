@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import models, schemas
 from database import engine, get_db
 from services.ocr import analyze_document
-from services import calculator, distribution, document_generator, catastro, aeat
+from services import calculator, distribution, document_generator, catastro, aeat, ai_extractor
 import auth
 
 models.Base.metadata.create_all(bind=engine)
@@ -229,12 +229,39 @@ def upload_doc_for_case(
     assets_created = 0
     cadastral_references_found = 0
     processing_message = ""
+    ai_data = None
 
     # Extracción OCR
     try:
         print(f"OCR: Iniciando análisis de {file_location} (Tipo: {type})")
         extracted = analyze_document(file_location, type)
         print(f"OCR: Datos extraídos: {extracted}")
+
+        # --- AI Extraction (Mistral) ---
+        # Only for complex documents that benefit from LLM
+        if type in [models.DocType.TESTAMENT, models.DocType.DEED, models.DocType.LAST_WILL]:
+            print(f"AI: Iniciando extracción inteligente para {type}...")
+            # Obtener texto crudo, si no hay, intentar analizar de nuevo o usar vacío
+            raw_text = extracted.get("raw_text", "")
+            
+            ai_extraction_result = ai_extractor.ai_extractor.extract_data_from_text(raw_text, type)
+            print(f"AI: Resultado: {ai_extraction_result}")
+            
+            # Guardar resultado en variable para respuesta
+            ai_data = ai_extraction_result
+
+            # Merge AI findings with OCR findings (simple strategy for now)
+            if ai_data and "cadastral_references" in ai_data and isinstance(ai_data["cadastral_references"], list):
+                ocr_refs = extracted.get("cadastral_references") or []
+                ai_refs = ai_data["cadastral_references"]
+                # Normalize and merge unique
+                # Filter both OCR and AI references for validity (length >= 18)
+                valid_ocr = [r for r in ocr_refs if isinstance(r, str) and len(r) >= 18]
+                valid_ai = [r for r in ai_refs if isinstance(r, str) and len(r) >= 18]
+                combined_refs = list(set(valid_ocr + valid_ai))
+                extracted["cadastral_references"] = combined_refs
+                ai_data["cadastral_references"] = combined_refs
+                print(f"AI+OCR: Referencias catastrales combinadas: {combined_refs}")
 
         
         if type == models.DocType.DEATH_CERTIFICATE:
@@ -368,7 +395,8 @@ def upload_doc_for_case(
         document=db_doc,
         assets_created=assets_created,
         cadastral_references_found=cadastral_references_found,
-        message=processing_message
+        message=processing_message,
+        ai_data=ai_data
     )
 
 # --- Advanced Features ---

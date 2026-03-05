@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/backend
 
 # Establece la variable de entorno PYTHONPATH
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/backend
 
 # Crea el directorio de uploads si no existe
 RUN mkdir -p /app/backend/uploads && mkdir -p /app/backend/db

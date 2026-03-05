@@ -33,3 +33,5 @@ pdf2image==1.17.0
 Pillow==10.2.0
 reportlab
 xmltodict
+mistralai
+python-dotenv
