@@ -253,14 +253,30 @@ def upload_doc_for_case(
             # Merge AI findings with OCR findings (simple strategy for now)
             ai_refs = []
             if ai_data:
-                # Intenta encontrar referencias en diferentes claves posibles que la IA pueda devolver
+                print(f"DEBUG: Estructura de ai_data: {ai_data.keys() if isinstance(ai_data, dict) else 'No es dict'}")
+                
+                # Helper para extraer refs de una lista de bienes
+                def extract_refs_from_bienes(bienes_list):
+                    refs = []
+                    if isinstance(bienes_list, list):
+                        for bien in bienes_list:
+                            if isinstance(bien, dict) and "referencia_catastral" in bien and bien["referencia_catastral"]:
+                                refs.append(bien["referencia_catastral"])
+                    return refs
+
+                # 1. Caso directo: "cadastral_references"
                 if "cadastral_references" in ai_data and isinstance(ai_data["cadastral_references"], list):
-                     ai_refs = ai_data["cadastral_references"]
-                elif "bienes_inmuebles" in ai_data and isinstance(ai_data["bienes_inmuebles"], list):
-                    # Extraer 'referencia_catastral' de la lista de objetos 'bienes_inmuebles'
-                    for bien in ai_data["bienes_inmuebles"]:
-                        if isinstance(bien, dict) and "referencia_catastral" in bien and bien["referencia_catastral"]:
-                            ai_refs.append(bien["referencia_catastral"])
+                     ai_refs.extend(ai_data["cadastral_references"])
+                
+                # 2. Caso lista plana: "bienes_inmuebles"
+                if "bienes_inmuebles" in ai_data:
+                    ai_refs.extend(extract_refs_from_bienes(ai_data["bienes_inmuebles"]))
+
+                # 3. Caso anidado: "documento" -> "bienes_inmuebles"
+                if "documento" in ai_data and isinstance(ai_data["documento"], dict):
+                     doc_data = ai_data["documento"]
+                     if "bienes_inmuebles" in doc_data:
+                        ai_refs.extend(extract_refs_from_bienes(doc_data["bienes_inmuebles"]))
             
             if ai_refs:
                 ocr_refs = extracted.get("cadastral_references") or []
