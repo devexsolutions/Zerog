@@ -40,6 +40,19 @@ class AssetBase(BaseModel):
 class AssetCreate(AssetBase):
     pass
 
+class AssetUpdate(BaseModel):
+    type: Optional[str] = None
+    value: Optional[float] = None
+    is_ganancial: Optional[bool] = None
+    is_debt: Optional[bool] = None
+    is_funeral_expense: Optional[bool] = None
+    description: Optional[str] = None
+    cadastral_reference: Optional[str] = None
+    address: Optional[str] = None
+    surface: Optional[float] = None
+    usage: Optional[str] = None
+    reference_value: Optional[float] = None
+
 class Asset(AssetBase):
     id: int
     case_id: int
@@ -64,12 +77,26 @@ class Doc(DocBase):
     class Config:
         from_attributes = True
 
+class AssetCreatedInfo(BaseModel):
+    id: Optional[int] = None
+    description: str
+    cadastral_reference: Optional[str] = None
+    value: float
+    type: str
+
+class FailedReferenceInfo(BaseModel):
+    reference: str
+    error: str
+
 class DocUploadResponse(BaseModel):
     document: Doc
     assets_created: int = 0
     cadastral_references_found: int = 0
     message: str = ""
     ai_data: Optional[Dict[str, Any]] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+    created_assets_list: List[AssetCreatedInfo] = []
+    failed_references_list: List[FailedReferenceInfo] = []
 
     class Config:
         from_attributes = True

@@ -279,26 +279,38 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
           if (docType === 'testamento') {
             setProcessingStatus(prev => ({ ...prev, [docType]: result.message }));
             
-            // Mostrar información detallada sobre el procesamiento
-            if (result.cadastral_references_found > 0) {
-              setTimeout(() => {
-                if (result.assets_created > 0) {
-                  setProcessingStatus(prev => ({ ...prev, [docType]: `✅ Se crearon ${result.assets_created} bienes automáticamente` }));
-                } else {
-                  setProcessingStatus(prev => ({ ...prev, [docType]: 'ℹ️ Las referencias ya existen en el inventario' }));
-                }
-                
-                setTimeout(() => {
-                  setProcessingStatus(prev => ({ ...prev, [docType]: '' }));
-                  setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
-                }, 3000);
-              }, 2000);
-            } else {
-              setTimeout(() => {
-                setProcessingStatus(prev => ({ ...prev, [docType]: '' }));
-                setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
-              }, 2000);
+            // Construir mensaje detallado de resultados
+            let detailMsg = "";
+            let hasErrors = false;
+            
+            if (result.assets_created > 0) {
+                detailMsg += `✅ Se han creado ${result.assets_created} bienes automáticamente.\n`;
+            } else if (result.cadastral_references_found > 0) {
+                detailMsg += `ℹ️ Se encontraron ${result.cadastral_references_found} referencias (ya existían o no se pudieron procesar).\n`;
             }
+            
+            if (result.failed_references_list && result.failed_references_list.length > 0) {
+                hasErrors = true;
+                detailMsg += `\n⚠️ Errores en consulta a Catastro (${result.failed_references_list.length}):\n`;
+                result.failed_references_list.forEach((fail: any) => {
+                    detailMsg += `- ${fail.reference}: ${fail.error}\n`;
+                });
+            }
+            
+            if (detailMsg) {
+                // Usar alert para asegurar que el usuario ve los detalles importantes
+                alert(detailMsg);
+            }
+
+            setProcessingStatus(prev => ({ 
+                ...prev, 
+                [docType]: hasErrors ? '⚠️ Procesado con errores' : (result.assets_created > 0 ? '✅ Bienes creados' : '✅ Procesado') 
+            }));
+            
+            setTimeout(() => {
+              setProcessingStatus(prev => ({ ...prev, [docType]: '' }));
+              setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
+            }, 5000);
           }
         }
         
@@ -507,6 +519,37 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       }
   };
 
+  const handleUpdateAsset = async (assetId: number, field: string, value: any) => {
+      try {
+          // Actualización optimista en UI
+          setAssets(prev => prev.map(a => a.id === assetId ? { ...a, [field]: value } : a));
+
+          const res = await fetch(`${API_URL}/cases/${caseId}/assets/${assetId}`, {
+              method: 'PUT',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ [field]: value })
+          });
+
+          if (!res.ok) {
+              const error = await res.json();
+              console.error("Error updating asset:", error);
+              fetchData(); // Recargar para revertir/asegurar consistencia
+          } else {
+             // Si cambia el valor, recargar cálculos (breve delay para que el backend procese si fuera necesario, aunque aquí es directo)
+             if (field === 'value' || field === 'reference_value') {
+                 // Debounce o esperar un poco podría ser mejor, pero por ahora recargamos
+                 fetchData();
+             }
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Error de conexión al actualizar el bien");
+      }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -712,9 +755,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                                 {asset.type}
                                             </span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-lg font-semibold text-gray-900">
-                                                    {asset.value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                                </span>
+                                                <CurrencyInput
+                                                    value={asset.value}
+                                                    onValueChange={(val) => handleUpdateAsset(asset.id, 'value', val)}
+                                                    className="text-lg font-semibold text-gray-900 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:ring-0 px-0 py-1 text-right max-w-[140px]"
+                                                />
                                                 <button
                                                     onClick={() => handleDeleteAsset(asset.id)}
                                                     className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
@@ -749,10 +794,15 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                                     <span className="font-medium">Uso:</span> {asset.usage}
                                                 </p>
                                             )}
-                                            {asset.reference_value && asset.reference_value > 0 && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Valor de referencia:</span> {asset.reference_value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                                </p>
+                                            {(asset.type === 'real_estate' || (asset.reference_value !== undefined && asset.reference_value !== null)) && (
+                                                <div className="text-gray-600 flex items-center gap-2 mt-1">
+                                                    <span className="font-medium">Valor ref:</span> 
+                                                    <CurrencyInput
+                                                        value={asset.reference_value || 0}
+                                                        onValueChange={(val) => handleUpdateAsset(asset.id, 'reference_value', val)}
+                                                        className="text-sm text-gray-600 bg-transparent border-b border-gray-200 focus:border-blue-500 px-0 py-0 text-right max-w-[100px]"
+                                                    />
+                                                </div>
                                             )}
                                         </div>
                                     </div>
