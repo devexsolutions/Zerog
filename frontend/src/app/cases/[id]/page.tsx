@@ -1,10 +1,15 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { ArrowLeft, Upload, CheckCircle, AlertCircle, Clock, FileText, Calculator, Landmark, Download, Users, Search, Plus, MapPin, Trash2 } from 'lucide-react';
+import { 
+  ArrowLeft, Upload, CheckCircle, AlertCircle, Clock, FileText, 
+  Calculator, Landmark, Download, Users, Search, Plus, MapPin, 
+  Trash2, Calendar, CreditCard, ChevronRight, FileCheck, Euro
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import DashboardLayout from '@/components/DashboardLayout';
 
 // Funciones auxiliares para formato de moneda española
 const formatCurrency = (value: number): string => {
@@ -62,6 +67,12 @@ const CurrencyInput = ({
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState("");
 
+  useEffect(() => {
+    if (!isEditing) {
+      setDisplayValue(formatCurrency(value));
+    }
+  }, [value, isEditing]);
+
   const handleFocus = () => {
     setIsEditing(true);
     setTempValue(value === 0 ? "" : value.toString().replace(".", ","));
@@ -94,7 +105,7 @@ const CurrencyInput = ({
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       placeholder={placeholder}
-      className={`${className} ${isEditing ? 'text-left' : 'text-right'}`}
+      className={`bg-transparent border-none focus:ring-0 p-0 w-full text-sm font-medium ${className} ${isEditing ? 'text-left' : 'text-right'}`}
       style={{ fontVariantNumeric: 'tabular-nums' }}
     />
   );
@@ -170,7 +181,6 @@ interface DistributionResult {
 }
 
 export default function CaseDetail({ params }: { params: Promise<{ id: string }> }) {
-  // Desempaquetar params usando hook use() (Next.js 15 pattern)
   const resolvedParams = use(params);
   const caseId = resolvedParams.id;
 
@@ -186,6 +196,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const [marketValue, setMarketValue] = useState(0);
   const [referenceValue, setReferenceValue] = useState(0);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'assets' | 'documents' | 'distribution'>('overview');
   
   // Estados para el progreso de carga de testamentos
   const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
@@ -398,8 +409,6 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
     }
   };
 
-  if (!isMounted) return null;
-
   const handleSearchCatastro = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!catastroRef) return;
@@ -550,19 +559,27 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       }
   };
 
+  if (!isMounted) return null;
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">Cargando expediente...</p>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!caseData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-red-500">Expediente no encontrado.</p>
-      </div>
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-full text-gray-500">
+          <AlertCircle size={48} className="mb-4 text-red-500" />
+          <p className="text-xl font-medium">Expediente no encontrado</p>
+          <Link href="/" className="mt-4 text-blue-600 hover:underline">Volver al inicio</Link>
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -585,445 +602,462 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const deadlineDate = caseData.date_of_death ? new Date(new Date(caseData.date_of_death).setMonth(new Date(caseData.date_of_death).getMonth() + 6)) : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      {/* Header */}
-      <header className="mb-8">
-        <Link href="/" className="inline-flex items-center text-gray-500 hover:text-gray-700 mb-4">
-          <ArrowLeft size={16} className="mr-1" /> Volver al listado
-        </Link>
-        <div className="flex justify-between items-start">
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              Expediente #{caseData.id} 
-              <span className="text-sm font-normal text-gray-500 bg-gray-200 px-2 py-1 rounded-full">{caseData.user_id}</span>
-            </h1>
-            <p className="text-gray-600 mt-1">
-                {caseData.deceased_name && <span className="font-semibold block text-lg">{caseData.deceased_name} {caseData.deceased_dni && `(${caseData.deceased_dni})`}</span>}
-                {caseData.has_will ? "Con Testamento" : "Intestada (Sin Testamento)"} • Fallecimiento: {caseData.date_of_death ? new Date(caseData.date_of_death).toLocaleDateString() : 'No registrada'}
-            </p>
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+              <Link href="/" className="hover:text-blue-600 transition-colors">Expedientes</Link>
+              <ChevronRight size={14} />
+              <span>#{caseData.id}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900">{caseData.deceased_name || 'Sin nombre'}</h1>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                caseData.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {caseData.status === 'open' ? 'Abierto' : 'Cerrado'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-gray-500">
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                <Calendar size={16} className="text-blue-600"/> 
+                <span className="font-medium">Fallecimiento:</span> {caseData.date_of_death}
+              </div>
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                <CreditCard size={16} className="text-purple-600"/> 
+                <span className="font-medium">DNI:</span> {caseData.deceased_dni}
+              </div>
+              {deadlineDate && (
+                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                  <Clock size={16} className="text-orange-600"/> 
+                  <span className="font-medium">Plazo:</span> {deadlineDate.toLocaleDateString()}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="text-right flex flex-col items-end gap-2">
-             <div className={`px-3 py-1 rounded-full text-sm font-semibold inline-block
-                ${caseData.status === 'PENDIENTE' ? 'bg-yellow-100 text-yellow-800' : 
-                  caseData.status === 'ABIERTO' ? 'bg-green-100 text-green-800' : 
-                  'bg-gray-100 text-gray-800'}`}>
-                {caseData.status}
-             </div>
-             {distribution && (
-                 <>
-                    <button 
-                        onClick={handleDownloadReport}
-                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition shadow-sm w-full justify-center"
-                    >
-                        <Download size={16} /> Informe Reparto
-                    </button>
-                    <button 
-                        onClick={handleDownloadModel650}
-                        className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition shadow-sm w-full justify-center"
-                    >
-                        <FileText size={16} /> Borrador 650
-                    </button>
-                    <button 
-                        onClick={handleDownloadModel650XML}
-                        className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition shadow-sm w-full justify-center"
-                    >
-                        <Download size={16} /> XML AEAT
-                    </button>
-                 </>
-             )}
+          
+          <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={handleDownloadReport}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors shadow-sm"
+            >
+              <FileText size={16} />
+              Informe
+            </button>
+            <button 
+              onClick={handleDownloadModel650}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors shadow-sm"
+            >
+              <FileCheck size={16} />
+              Modelo 650
+            </button>
+            <button 
+              onClick={handleDownloadModel650XML}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm"
+            >
+              <Download size={16} />
+              Exportar XML
+            </button>
           </div>
         </div>
-      </header>
 
-      {/* Timeline de Plazos */}
-      <section className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Clock size={20} className="text-blue-600" /> Plazo Impuesto Sucesiones (6 meses)
-        </h3>
-        {caseData.date_of_death ? (
-            <div>
-                <div className="flex justify-between text-sm text-gray-600 mb-2">
-                    <span>Inicio: {new Date(caseData.date_of_death).toLocaleDateString()}</span>
-                    <span className="font-bold text-red-600">Límite: {deadlineDate?.toLocaleDateString()}</span>
+        {/* Content Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {['overview', 'assets', 'documents', 'distribution'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`
+                  whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors
+                  ${activeTab === tab
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                {tab === 'overview' && 'Resumen General'}
+                {tab === 'assets' && 'Inventario de Bienes'}
+                {tab === 'documents' && 'Documentación'}
+                {tab === 'distribution' && 'Reparto y Adjudicación'}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="min-h-[500px]">
+          {/* OVERVIEW TAB */}
+          {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* KPIs */}
+              <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-500 text-sm font-medium">Caudal Relicto Neto</h3>
+                    <div className="p-2 bg-green-50 rounded-lg">
+                      <Euro size={20} className="text-green-600" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900">{formatCurrency(calculation?.net_estate || 0)}</p>
+                  <div className="mt-2 text-sm text-green-600 flex items-center gap-1">
+                    <ArrowLeft size={14} className="rotate-45" />
+                    <span>Calculado automáticamente</span>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                    <div 
-                        className={`h-4 rounded-full transition-all duration-500 ${timeProgress > 80 ? 'bg-red-500' : 'bg-blue-500'}`} 
+                
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-500 text-sm font-medium">Ajuar Doméstico (3%)</h3>
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <Landmark size={20} className="text-blue-600" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900">{formatCurrency(calculation?.household_goods || 0)}</p>
+                  <div className="mt-2 text-sm text-blue-600">
+                    Calculado sobre activo total
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-500 text-sm font-medium">Base Imponible Total</h3>
+                    <div className="p-2 bg-purple-50 rounded-lg">
+                      <Calculator size={20} className="text-purple-600" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900">{formatCurrency(calculation?.taxable_base || 0)}</p>
+                  <div className="mt-2 text-sm text-purple-600">
+                    Suma total a repartir
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress & Checklist */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                    <h3 className="font-semibold text-gray-900">Estado del Trámite</h3>
+                    <span className="text-sm text-gray-500">{Math.round(timeProgress)}% plazo consumido</span>
+                  </div>
+                  <div className="p-6">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                      <div 
+                        className={`h-2.5 rounded-full ${timeProgress > 80 ? 'bg-red-500' : 'bg-blue-600'}`} 
                         style={{ width: `${timeProgress}%` }}
-                    ></div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 text-right">
-                    {timeProgress >= 100 ? "Plazo vencido" : `Quedan ${Math.ceil((100 - timeProgress) * 1.8)} días aprox.`}
-                </p>
-            </div>
-        ) : (
-            <div className="text-yellow-600 bg-yellow-50 p-3 rounded-md text-sm">
-                ⚠️ Registra la fecha de fallecimiento para activar el control de plazos.
-            </div>
-        )}
-      </section>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Columna Izquierda: Checklist Documental */}
-        <div className="lg:col-span-2 space-y-8">
-            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                        <FileText size={20} className="text-indigo-600" /> Documentación Requerida
-                    </h3>
-                    <span className="text-sm text-gray-500">
-                        {checklist.filter(c => c.status !== 'MISSING').length} / {checklist.length}
-                    </span>
-                </div>
-                <div className="divide-y divide-gray-100">
-                    {checklist.map((item, idx) => (
-                        <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                            <div className="flex items-center gap-3">
-                                {item.status === 'VALIDATED' ? (
-                                    <CheckCircle className="text-green-500" size={24} />
-                                ) : item.status === 'UPLOADED' ? (
-                                    <Clock className="text-yellow-500" size={24} />
-                                ) : (
-                                    <AlertCircle className="text-gray-300" size={24} />
-                                )}
-                                <div>
-                                    <p className="font-medium text-gray-800">{item.label}</p>
-                                    <p className="text-xs text-gray-500 uppercase">{item.type.replace('_', ' ')}</p>
-                                </div>
-                            </div>
-                            <div>
-                                {/* Barra de progreso y estado de procesamiento */}
-                                {uploadProgress[item.type] ? (
-                                    <div className="flex flex-col items-end gap-2 min-w-[200px]">
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div 
-                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                                style={{ width: `${uploadProgress[item.type]}%` }}
-                                            ></div>
-                                        </div>
-                                        <span className="text-xs text-gray-600">
-                                            {processingStatus[item.type] || 'Subiendo...'}
-                                        </span>
-                                    </div>
-                                ) : item.status === 'MISSING' || item.status === 'PENDING' || item.status === 'PENDIENTE' ? (
-                                    <label className="flex items-center gap-1 text-sm text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded border border-blue-200 cursor-pointer">
-                                        <Upload size={14} /> Subir
-                                        <input 
-                                            type="file" 
-                                            className="hidden" 
-                                            accept=".pdf,.jpg,.png"
-                                            onChange={(e) => {
-                                                if (e.target.files?.[0]) {
-                                                    handleFileUpload(e.target.files[0], item.type);
-                                                }
-                                            }}
-                                        />
-                                    </label>
-                                ) : (
-                                    <span className={`text-xs font-semibold px-2 py-1 rounded 
-                                        ${item.status === 'VALIDATED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                        {item.status}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* Inventario de Bienes */}
-            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                        <Calculator size={20} className="text-gray-700" /> Inventario de Bienes
-                    </h3>
-                </div>
-                <div className="p-6">
-                    {assets.length === 0 ? (
-                        <div className="text-center py-8">
-                            <Calculator className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <h3 className="text-sm font-medium text-gray-900 mb-2">No hay bienes registrados</h3>
-                            <p className="text-sm text-gray-500">Utiliza la sección de Catastro arriba para añadir inmuebles al inventario.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {assets.map((asset) => (
-                                    <div key={asset.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-                                                {asset.type}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                <CurrencyInput
-                                                    value={asset.value}
-                                                    onValueChange={(val) => handleUpdateAsset(asset.id, 'value', val)}
-                                                    className="text-lg font-semibold text-gray-900 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:ring-0 px-0 py-1 text-right max-w-[140px]"
-                                                />
-                                                <button
-                                                    onClick={() => handleDeleteAsset(asset.id)}
-                                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                                                    title="Eliminar bien"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <h4 className="font-medium text-gray-900 mb-2">
-                                            {asset.description || 'Sin descripción'}
-                                        </h4>
-                                        {asset.address && (
-                                            <p className="text-sm text-gray-600 mb-2">
-                                                <MapPin size={14} className="inline mr-1" />
-                                                {asset.address}
-                                            </p>
-                                        )}
-                                        <div className="space-y-1 text-sm">
-                                            {asset.cadastral_reference && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Referencia:</span> {asset.cadastral_reference}
-                                                </p>
-                                            )}
-                                            {asset.surface && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Superficie:</span> {asset.surface} m²
-                                                </p>
-                                            )}
-                                            {asset.usage && (
-                                                <p className="text-gray-600">
-                                                    <span className="font-medium">Uso:</span> {asset.usage}
-                                                </p>
-                                            )}
-                                            {(asset.type === 'real_estate' || (asset.reference_value !== undefined && asset.reference_value !== null)) && (
-                                                <div className="text-gray-600 flex items-center gap-2 mt-1">
-                                                    <span className="font-medium">Valor ref:</span> 
-                                                    <CurrencyInput
-                                                        value={asset.reference_value || 0}
-                                                        onValueChange={(val) => handleUpdateAsset(asset.id, 'reference_value', val)}
-                                                        className="text-sm text-gray-600 bg-transparent border-b border-gray-200 focus:border-blue-500 px-0 py-0 text-right max-w-[100px]"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-blue-900">Total del Inventario:</span>
-                                    <span className="text-lg font-bold text-blue-900">
-                                        {assets.reduce((sum, asset) => sum + asset.value, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </section>
-        </div>
-
-        {/* Columna Derecha: Motor de Cálculo y Reparto */}
-        <div className="space-y-8">
-            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 bg-slate-50">
-                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                        <Calculator size={20} className="text-emerald-600" /> Masa Hereditaria
-                    </h3>
-                </div>
-                <div className="p-6 space-y-4">
-                    {calculation && (
-                        <>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Activos Totales</span>
-                                <span className="font-mono font-medium text-green-600">
-                                    {calculation.total_assets.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Deudas y Gastos</span>
-                                <span className="font-mono font-medium text-red-600">
-                                    - {calculation.total_debts.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                </span>
-                            </div>
-                            <div className="border-t border-gray-200 my-2"></div>
-                            <div className="flex justify-between items-center font-bold">
-                                <span className="text-gray-800">Caudal Relicto</span>
-                                <span className="font-mono text-gray-900">
-                                    {calculation.net_estate.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm bg-blue-50 p-2 rounded mt-2">
-                                <span className="text-blue-800 flex items-center gap-1">
-                                    <Landmark size={14} /> Ajuar Doméstico (3%)
-                                </span>
-                                <span className="font-mono font-medium text-blue-800">
-                                    + {calculation.household_goods.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                </span>
-                            </div>
-                            <div className="bg-gray-900 text-white p-4 rounded-lg mt-4">
-                                <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Base Imponible Total</div>
-                                <div className="text-2xl font-mono font-bold">
-                                    {calculation.taxable_base.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </section>
-            
-            {distribution && distribution.heirs_distribution.length > 0 && (
-                <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200 bg-emerald-50">
-                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                            <Users size={20} className="text-emerald-700" /> Reparto Herederos
-                        </h3>
+                      ></div>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Heredero</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Parentesco</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">%</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Cuota Hereditaria</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Base Imponible</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Impuesto (Est.)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {distribution.heirs_distribution.map((heir) => (
-                                    <tr key={heir.heir_id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{heir.name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{heir.relationship}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{heir.share_percentage}%</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{heir.quota_value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                                            {heir.tax_base.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600 text-right">
-                                            {heir.total_to_pay.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    
+                    <div className="space-y-4">
+                      {checklist.map((item, index) => (
+                        <div key={index} className="flex items-center p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                          <div className={`mr-4 flex-shrink-0 ${item.status === 'completed' ? 'text-green-500' : 'text-gray-300'}`}>
+                            {item.status === 'completed' ? <CheckCircle size={24} /> : <div className="w-6 h-6 rounded-full border-2 border-current"></div>}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className={`font-medium ${item.status === 'completed' ? 'text-gray-900' : 'text-gray-500'}`}>
+                              {item.label}
+                            </h4>
+                          </div>
+                          {item.file_url && (
+                            <Link 
+                              href={item.file_url} 
+                              target="_blank"
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              Ver documento
+                            </Link>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                </section>
-            )}
-
-            {/* Catastro Integration Section */}
-            <section className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
-                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                        <MapPin size={20} className="text-blue-700" /> Añadir Inmueble (Catastro)
-                    </h3>
+                  </div>
                 </div>
-                <div className="p-6">
-                    <form onSubmit={handleSearchCatastro} className="flex gap-4 items-end mb-6">
-                        <div className="flex-1">
-                            <label htmlFor="catastroRef" className="block text-sm font-medium text-gray-700 mb-1">
-                                Referencia Catastral
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    id="catastroRef"
-                                    value={catastroRef}
-                                    onChange={(e) => setCatastroRef(e.target.value)}
-                                    placeholder="Ej: 13077A01800039"
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              </div>
+
+              {/* Quick Actions / Recent Activity Placeholder */}
+              <div className="space-y-6">
+                <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                  <h3 className="font-semibold text-blue-900 mb-2">Próximos pasos</h3>
+                  <p className="text-sm text-blue-700 mb-4">
+                    Recuerda verificar los valores de referencia de los inmuebles antes de generar el informe final.
+                  </p>
+                  <button 
+                    onClick={() => setActiveTab('assets')}
+                    className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Ir a Bienes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ASSETS TAB */}
+          {activeTab === 'assets' && (
+            <div className="space-y-6">
+              {/* Catastro Search */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Search size={20} className="text-gray-400" />
+                  Añadir Inmueble desde Catastro
+                </h3>
+                <form onSubmit={handleSearchCatastro} className="flex gap-4">
+                  <input
+                    type="text"
+                    value={catastroRef}
+                    onChange={(e) => setCatastroRef(e.target.value)}
+                    placeholder="Referencia Catastral (20 caracteres)"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={searchingCatastro || !catastroRef}
+                    className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                  >
+                    {searchingCatastro ? 'Buscando...' : 'Buscar'}
+                  </button>
+                </form>
+
+                {catastroData && (
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{catastroData.address}</h4>
+                        <p className="text-sm text-gray-500">{catastroData.usage} • {catastroData.surface} m²</p>
+                      </div>
+                      <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-medium">
+                        {catastroData.reference}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Valor de Mercado (€)</label>
+                        <input
+                          type="number"
+                          value={marketValue || ''}
+                          onChange={(e) => setMarketValue(parseFloat(e.target.value))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Valor de Referencia (€)</label>
+                        <input
+                          type="number"
+                          value={referenceValue || ''}
+                          onChange={(e) => setReferenceValue(parseFloat(e.target.value))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 bg-gray-100"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Obtenido automáticamente si disponible</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setCatastroData(null)}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium text-sm"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleAddProperty}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-2"
+                      >
+                        <Plus size={16} />
+                        Añadir al Inventario
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Assets Table */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                  <h3 className="font-semibold text-gray-900">Inventario Actual</h3>
+                  <span className="text-sm text-gray-500">{assets.length} bienes registrados</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3">Descripción</th>
+                        <th className="px-6 py-3">Tipo</th>
+                        <th className="px-6 py-3 text-right">Valor Mercado</th>
+                        <th className="px-6 py-3 text-right">Valor Ref.</th>
+                        <th className="px-6 py-3 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {assets.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                            No hay bienes registrados todavía.
+                          </td>
+                        </tr>
+                      ) : (
+                        assets.map((asset) => (
+                          <tr key={asset.id} className="hover:bg-gray-50 transition-colors group">
+                            <td className="px-6 py-4">
+                              <div className="font-medium text-gray-900">{asset.description}</div>
+                              {asset.cadastral_reference && (
+                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                  <MapPin size={10} /> {asset.cadastral_reference}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="capitalize px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">
+                                {asset.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="w-32 ml-auto p-1 rounded hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 transition-all cursor-text">
+                                <CurrencyInput 
+                                  value={asset.value} 
+                                  onValueChange={(val) => handleUpdateAsset(asset.id, 'value', val)}
                                 />
-                                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                            </div>
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={searchingCatastro || !catastroRef}
-                            className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {searchingCatastro ? 'Buscando...' : 'Buscar'}
-                        </button>
-                    </form>
-
-                    {catastroData && (
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Dirección</span>
-                                    <p className="text-gray-900 font-medium">{catastroData.address}</p>
-                                </div>
-                                <div>
-                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Uso Principal</span>
-                                    <p className="text-gray-900">{catastroData.usage || 'Desconocido'}</p>
-                                </div>
-                                <div>
-                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Superficie</span>
-                                    <p className="text-gray-900">{catastroData.surface} m²</p>
-                                </div>
-                                <div>
-                                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Referencia</span>
-                                    <p className="font-mono text-gray-800">{catastroData.reference}</p>
-                                </div>
-                            </div>
-
-                            <div className="mb-4 border-t border-gray-200 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Valor de Referencia (Base Imponible)
-                                    </label>
-                                    <div className="flex gap-2 items-center">
-                                        <CurrencyInput
-                                            value={referenceValue}
-                                            onValueChange={setReferenceValue}
-                                            placeholder="0,00 €"
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                                        />
-                                        <a 
-                                            href="https://www1.sedecatastro.gob.es/Accesos/SECAccvr.aspx" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-md text-xs font-semibold whitespace-nowrap"
-                                            title="Consultar en Sede Catastro"
-                                        >
-                                            Consultar
-                                        </a>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Consultar en Sede Electrónica del Catastro
-                                    </p>
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Valor de Mercado (Estimado)
-                                    </label>
-                                    <CurrencyInput
-                                        value={marketValue}
-                                        onValueChange={setMarketValue}
-                                        placeholder="0,00 €"
-                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Si es mayor al de referencia, se usará este.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end">
-                                <button
-                                    onClick={handleAddProperty}
-                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
-                                >
-                                    <Plus size={18} />
-                                    Añadir al Inventario
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="w-32 ml-auto p-1 rounded hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 transition-all cursor-text">
+                                <CurrencyInput 
+                                  value={asset.reference_value || 0} 
+                                  onValueChange={(val) => handleUpdateAsset(asset.id, 'reference_value', val)}
+                                  className="text-gray-500"
+                                />
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                onClick={() => handleDeleteAsset(asset.id)}
+                                className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50 opacity-0 group-hover:opacity-100"
+                                title="Eliminar bien"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-            </section>
+              </div>
+            </div>
+          )}
+
+          {/* DOCUMENTS TAB */}
+          {activeTab === 'documents' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[
+                { id: 'DNI', label: 'DNI / Cert. Defunción', icon: CreditCard, desc: 'Sube el DNI del fallecido o certificado.' },
+                { id: 'testamento', label: 'Testamento / Últimas Voluntades', icon: FileText, desc: 'El sistema extraerá automáticamente los datos.' },
+                { id: 'banco', label: 'Certificados Bancarios', icon: Landmark, desc: 'Para acreditar saldos y posiciones.' },
+                { id: 'escrituras', label: 'Escrituras de Propiedad', icon: MapPin, desc: 'Títulos de propiedad de inmuebles.' }
+              ].map((doc) => (
+                <div key={doc.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+                      <doc.icon size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900">{doc.label}</h3>
+                      <p className="text-sm text-gray-500 mb-4">{doc.desc}</p>
+                      
+                      <div className="mt-2">
+                        <label className="relative inline-flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-colors group">
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], doc.id)}
+                          />
+                          <div className="flex items-center gap-2 text-sm text-gray-600 group-hover:text-blue-600 font-medium">
+                            <Upload size={16} />
+                            <span>Seleccionar archivo</span>
+                          </div>
+                        </label>
+                      </div>
+
+                      {(uploadProgress[doc.id] > 0 || processingStatus[doc.id]) && (
+                        <div className="mt-4 space-y-2">
+                          {uploadProgress[doc.id] > 0 && uploadProgress[doc.id] < 100 && (
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress[doc.id]}%` }}></div>
+                            </div>
+                          )}
+                          {processingStatus[doc.id] && (
+                            <p className="text-xs font-medium text-blue-600 flex items-center gap-1 animate-pulse">
+                              {processingStatus[doc.id]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* DISTRIBUTION TAB */}
+          {activeTab === 'distribution' && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 className="font-semibold text-gray-900">Cuadro de Reparto</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3">Heredero</th>
+                      <th className="px-6 py-3">Parentesco</th>
+                      <th className="px-6 py-3 text-right">Cuota (%)</th>
+                      <th className="px-6 py-3 text-right">Base Imponible</th>
+                      <th className="px-6 py-3 text-right">A Pagar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {!distribution?.heirs_distribution?.length ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                          No hay datos de reparto disponibles. Asegúrate de añadir herederos y bienes.
+                        </td>
+                      </tr>
+                    ) : (
+                      distribution.heirs_distribution.map((heir) => (
+                        <tr key={heir.heir_id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-900">{heir.name}</td>
+                          <td className="px-6 py-4 text-gray-500 capitalize">{heir.relationship}</td>
+                          <td className="px-6 py-4 text-right font-medium">{heir.share_percentage}%</td>
+                          <td className="px-6 py-4 text-right text-gray-900">{formatCurrency(heir.tax_base)}</td>
+                          <td className="px-6 py-4 text-right font-bold text-blue-600">{formatCurrency(heir.total_to_pay)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {distribution?.heirs_distribution?.length > 0 && (
+                    <tfoot className="bg-gray-50 font-semibold text-gray-900 border-t border-gray-200">
+                      <tr>
+                        <td colSpan={3} className="px-6 py-4 text-right">TOTALES</td>
+                        <td className="px-6 py-4 text-right">
+                          {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.tax_base, 0))}
+                        </td>
+                        <td className="px-6 py-4 text-right text-blue-700">
+                          {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.total_to_pay, 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
