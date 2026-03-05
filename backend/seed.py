@@ -4,8 +4,14 @@ import os
 from sqlalchemy.orm import Session
 from backend.database import SessionLocal, engine
 from backend.models import Base, User, Case, Heir, Asset, CaseStatus, AssetType
-from backend.auth import get_password_hash
+from passlib.context import CryptContext
 from datetime import datetime, timedelta
+
+# Create password context directly to avoid circular imports from auth.py
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 def seed_data():
     db = SessionLocal()
