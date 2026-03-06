@@ -17,11 +17,13 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user, token } = useAuth();
+  const toast = useToast();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCaseUserId, setNewCaseUserId] = useState('');
@@ -56,14 +58,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const newCase = await res.json();
         setNewCaseUserId('');
         setIsModalOpen(false);
+        toast.success('Expediente creado correctamente');
         // Navigate to the new case detail page
         router.push(`/cases/${newCase.id}`);
       } else {
-        alert('Error al crear el expediente');
+        toast.error('Error al crear el expediente');
       }
     } catch (error) {
       console.error(error);
-      alert('Error de conexión');
+      toast.error('Error de conexión');
     } finally {
       setCreatingCase(false);
     }
