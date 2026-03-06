@@ -31,6 +31,9 @@ class DocType(str, enum.Enum):
     BANK_CERTIFICATE = "certificado_bancario"
     DEED = "escritura"
     OTHER = "otro"
+    # Legacy/Frontend compatibility
+    BANCO = "banco"
+    ESCRITURAS = "escrituras"
 
 class Case(Base):
     __tablename__ = "cases"

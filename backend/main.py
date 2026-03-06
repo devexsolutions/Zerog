@@ -518,6 +518,13 @@ def get_case_checklist(case_id: int, db: Session = Depends(get_db), current_user
 
     for req in required_docs:
         doc = existing_docs.get(req["type"])
+        
+        # Fallback for legacy types (to support existing data)
+        if not doc and req["type"] == models.DocType.BANK_CERTIFICATE:
+            doc = existing_docs.get(models.DocType.BANCO)
+        if not doc and req["type"] == models.DocType.DEED:
+            doc = existing_docs.get(models.DocType.ESCRITURAS)
+
         status = doc.status if doc else "MISSING"
         checklist_status.append({
             "type": req["type"],
