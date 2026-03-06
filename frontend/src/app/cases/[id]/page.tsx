@@ -956,8 +956,8 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
               {[
                 { id: 'DNI', label: 'DNI / Cert. Defunción', icon: CreditCard, desc: 'Sube el DNI del fallecido o certificado.' },
                 { id: 'testamento', label: 'Testamento / Últimas Voluntades', icon: FileText, desc: 'El sistema extraerá automáticamente los datos.' },
-                { id: 'banco', label: 'Certificados Bancarios', icon: Landmark, desc: 'Para acreditar saldos y posiciones.' },
-                { id: 'escrituras', label: 'Escrituras de Propiedad', icon: MapPin, desc: 'Títulos de propiedad de inmuebles.' }
+                { id: 'certificado_bancario', label: 'Certificados Bancarios', icon: Landmark, desc: 'Para acreditar saldos y posiciones.' },
+                { id: 'escritura', label: 'Escrituras de Propiedad', icon: MapPin, desc: 'Títulos de propiedad de inmuebles.' }
               ].map((doc) => (
                 <div key={doc.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-start gap-4">
