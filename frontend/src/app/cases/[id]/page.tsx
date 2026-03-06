@@ -9,7 +9,9 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import DashboardLayout from '@/components/DashboardLayout';
+import Modal from '@/components/ui/Modal';
 
 // Funciones auxiliares para formato de moneda española
 const formatCurrency = (value: number): string => {
@@ -204,7 +206,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   
   const { token, logout } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
+  // State for OCR Report Modal
+  const [ocrReport, setOcrReport] = useState<{title: string, content: string} | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -309,8 +315,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
             }
             
             if (detailMsg) {
-                // Usar alert para asegurar que el usuario ve los detalles importantes
-                alert(detailMsg);
+                // Usar Modal para el reporte detallado en lugar de alert
+                setOcrReport({
+                  title: `Resultado del Análisis (${docType})`,
+                  content: detailMsg
+                });
             }
 
             setProcessingStatus(prev => ({ 
@@ -327,16 +336,17 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
         
         // Recargar datos para actualizar estado y cálculos (si OCR funcionó)
         fetchData();
+        toast.success("Documento subido correctamente");
       } else {
         setProcessingStatus(prev => ({ ...prev, [docType]: '❌ Error al subir documento' }));
         setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
-        alert("Error subiendo documento");
+        toast.error("Error subiendo documento");
       }
     } catch (error) {
       console.error(error);
       setProcessingStatus(prev => ({ ...prev, [docType]: '❌ Error de conexión' }));
       setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
-      alert("Error de conexión");
+      toast.error("Error de conexión");
     }
   };
 
@@ -354,12 +364,13 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
+            toast.success("Informe descargado correctamente");
         } else {
-            alert("Error al descargar el informe");
+            toast.error("Error al descargar el informe");
         }
     } catch (e) {
         console.error(e);
-        alert("Error de conexión");
+        toast.error("Error de conexión");
     }
   };
 
@@ -377,12 +388,13 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
+            toast.success("Modelo 650 (Borrador) descargado correctamente");
         } else {
-            alert("Error al descargar el borrador del Modelo 650");
+            toast.error("Error al descargar el borrador del Modelo 650");
         }
     } catch (e) {
         console.error(e);
-        alert("Error de conexión");
+        toast.error("Error de conexión");
     }
   };
 
@@ -400,12 +412,13 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
+            toast.success("Modelo 650 (XML) descargado correctamente");
         } else {
-            alert("Error al descargar el XML del Modelo 650");
+            toast.error("Error al descargar el XML del Modelo 650");
         }
     } catch (e) {
         console.error(e);
-        alert("Error de conexión");
+        toast.error("Error de conexión");
     }
   };
 
@@ -442,11 +455,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
             }
         } else {
             const error = await res.json();
-            alert(`Error: ${error.detail}`);
+            toast.error(`Error: ${error.detail}`);
         }
     } catch (err) {
         console.error(err);
-        alert("Error de conexión con el servicio de Catastro");
+        toast.error("Error de conexión con el servicio de Catastro");
     } finally {
         setSearchingCatastro(false);
     }
@@ -457,7 +470,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
       // Validación: al menos uno de los valores debe ser mayor que 0
       if (marketValue <= 0 && referenceValue <= 0) {
-          alert("Por favor, introduce al menos un valor: Valor de Mercado o Valor de Referencia");
+          toast.info("Por favor, introduce al menos un valor: Valor de Mercado o Valor de Referencia");
           return;
       }
 
@@ -486,7 +499,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
           });
 
           if (res.ok) {
-              alert("Inmueble añadido al inventario correctamente");
+              toast.success("Inmueble añadido al inventario correctamente");
               setCatastroData(null);
               setCatastroRef('');
               setMarketValue(0);
@@ -494,11 +507,11 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
               fetchData(); 
           } else {
               const error = await res.json();
-              alert(`Error al añadir inmueble: ${error.detail || 'Error desconocido'}`);
+              toast.error(`Error al añadir inmueble: ${error.detail || 'Error desconocido'}`);
           }
       } catch (e) {
           console.error(e);
-          alert("Error de conexión al guardar el inmueble");
+          toast.error("Error de conexión al guardar el inmueble");
       }
   };
 
@@ -516,15 +529,15 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
           });
 
           if (res.ok) {
-              alert("Bien eliminado del inventario correctamente");
+              toast.success("Bien eliminado del inventario correctamente");
               fetchData(); // Recargar la lista de assets
           } else {
               const error = await res.json();
-              alert(`Error al eliminar bien: ${error.detail || 'Error desconocido'}`);
+              toast.error(`Error al eliminar bien: ${error.detail || 'Error desconocido'}`);
           }
       } catch (e) {
           console.error(e);
-          alert("Error de conexión al eliminar el bien");
+          toast.error("Error de conexión al eliminar el bien");
       }
   };
 
@@ -555,7 +568,8 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
           }
       } catch (e) {
           console.error(e);
-          alert("Error de conexión al actualizar el bien");
+          fetchData();
+          toast.error("Error de conexión al actualizar el bien");
       }
   };
 
@@ -1058,6 +1072,26 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
           )}
         </div>
       </div>
+      
+      {/* OCR Report Modal */}
+      <Modal
+        isOpen={!!ocrReport}
+        onClose={() => setOcrReport(null)}
+        title={ocrReport?.title || ''}
+        footer={
+          <button 
+            onClick={() => setOcrReport(null)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            Cerrar
+          </button>
+        }
+      >
+        <div className="whitespace-pre-wrap text-sm text-gray-700 font-mono bg-gray-50 p-4 rounded-lg border border-gray-100">
+          {ocrReport?.content}
+        </div>
+      </Modal>
+
     </DashboardLayout>
   );
 }

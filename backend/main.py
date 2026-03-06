@@ -380,7 +380,59 @@ def upload_doc_for_case(
                         "type": "bank_account"
                     })
         
-        elif type == models.DocType.TESTAMENT or type == models.DocType.DEED:
+        elif type in [models.DocType.TESTAMENT, models.DocType.DEED, models.DocType.LAST_WILL]:
+            # --- Procesamiento de Herederos (AI) ---
+            if ai_data and "heirs" in ai_data and isinstance(ai_data["heirs"], list):
+                print(f"AI: Procesando {len(ai_data['heirs'])} herederos...")
+                for heir in ai_data["heirs"]:
+                    try:
+                        name = heir.get("name")
+                        if not name:
+                            continue
+                            
+                        # Normalizar nombre
+                        name = name.strip().upper()
+                        
+                        # Evitar duplicados
+                        exists = db.query(models.Heir).filter(
+                            models.Heir.case_id == case_id,
+                            models.Heir.name == name
+                        ).first()
+                        
+                        if exists:
+                            print(f"AI: Heredero {name} ya existe.")
+                            continue
+                            
+                        # Calcular share
+                        share_raw = str(heir.get("share", "0")).replace("%", "").replace(",", ".").strip()
+                        share_val = 0.0
+                        if "/" in share_raw:
+                            try:
+                                n, d = share_raw.split("/")
+                                share_val = (float(n) / float(d)) * 100
+                            except:
+                                pass
+                        else:
+                            try:
+                                share_val = float(share_raw)
+                            except:
+                                pass
+                                
+                        new_heir = models.Heir(
+                            case_id=case_id,
+                            name=name,
+                            relationship_degree=heir.get("relationship", "Otro"),
+                            share_percentage=share_val,
+                            fiscal_residence="Madrid", # Default MVP
+                            pre_existing_wealth=0.0
+                        )
+                        db.add(new_heir)
+                        print(f"AI: Heredero creado: {name} ({share_val}%)")
+                        
+                    except Exception as e:
+                        print(f"AI: Error procesando heredero {heir}: {e}")
+                db.commit()
+
             # Procesar referencias catastrales encontradas en el testamento o escritura
             # Usamos extracted["cadastral_references"] que ya contiene la combinación de OCR y AI
             if "cadastral_references" in extracted and extracted["cadastral_references"]:
