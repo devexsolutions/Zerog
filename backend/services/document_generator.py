@@ -42,7 +42,11 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
     assets_data = [["Descripción", "Tipo", "Valor (€)"]]
     for asset in case.assets:
         if not asset.is_debt:
-            assets_data.append([asset.description or "Sin descripción", asset.type, f"{asset.value:,.2f}"])
+            assets_data.append([
+                Paragraph(asset.description or "Sin descripción", normal_style),
+                asset.type, 
+                f"{asset.value:,.2f}"
+            ])
             
     if len(assets_data) > 1:
         t_assets = Table(assets_data, colWidths=[8*cm, 4*cm, 4*cm])
@@ -50,6 +54,7 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), # Centrado vertical
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
@@ -66,7 +71,11 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
     debts_data = [["Descripción", "Tipo", "Valor (€)"]]
     for asset in case.assets:
         if asset.is_debt:
-            debts_data.append([asset.description or "Sin descripción", asset.type, f"{asset.value:,.2f}"])
+            debts_data.append([
+                Paragraph(asset.description or "Sin descripción", normal_style),
+                asset.type,
+                f"{asset.value:,.2f}"
+            ])
             
     if len(debts_data) > 1:
         t_debts = Table(debts_data, colWidths=[8*cm, 4*cm, 4*cm])
@@ -74,6 +83,7 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
             ('BACKGROUND', (0, 0), (-1, 0), colors.firebrick),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.lavenderblush),
@@ -116,7 +126,7 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
     heirs_data = [["Heredero", "Parentesco", "Cuota (%)", "Valor Adjudicado (€)"]]
     for h in dist_result["heirs_distribution"]:
         heirs_data.append([
-            h["name"],
+            Paragraph(h["name"], normal_style),
             h["relationship"],
             f"{h['share_percentage']}%",
             f"{h['quota_value']:,.2f}"
@@ -128,6 +138,7 @@ def generate_pdf_report(case: models.Case) -> BytesIO:
             ('BACKGROUND', (0, 0), (-1, 0), colors.darkgreen),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ]))
