@@ -54,11 +54,36 @@ def analyze_document(file_path: str, doc_type: str):
         # Regex simple para fecha DD/MM/AAAA o DD-MM-AAAA
         # Busca explícitamente "Fecha de Defunción:" o solo la fecha
         date_match = re.search(r'(?:Fecha de Defunción|Fallecimiento|Fecha)[:\s]+(\d{1,2})[/-](\d{1,2})[/-](\d{4})', raw_text, re.IGNORECASE)
+        
+        # Soporte para fechas con mes en texto (ej: "12 de enero de 2024")
         if not date_match:
+            months_pattern = r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)'
+            text_date_pattern = fr'(\d{{1,2}})\s+de\s+{months_pattern}\s+de\s+(\d{{4}})'
+            date_match_text = re.search(text_date_pattern, raw_text, re.IGNORECASE)
+            
+            if date_match_text:
+                day = date_match_text.group(1)
+                month_str = date_match_text.group(2).lower()
+                year = date_match_text.group(3)
+                
+                months_map = {
+                    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+                    'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+                }
+                month = months_map.get(month_str, 1)
+                
+                try:
+                    dt = datetime(int(year), int(month), int(day))
+                    extracted_data["date_of_death"] = dt.isoformat()
+                    print(f"Fecha de defunción encontrada (texto): {extracted_data['date_of_death']}")
+                except ValueError as e:
+                    print(f"Error parseando fecha texto: {e}")
+
+        if not date_match and "date_of_death" not in extracted_data:
              # Fallback: buscar cualquier fecha en formato DD/MM/YYYY
              date_match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', raw_text)
 
-        if date_match:
+        if date_match and "date_of_death" not in extracted_data:
             try:
                 # Si hay 3 grupos capturados (día, mes, año)
                 # Si usó el primer regex con prefijo, los grupos son 1,2,3
@@ -78,9 +103,23 @@ def analyze_document(file_path: str, doc_type: str):
         
         # Intentar buscar Nombre del fallecido
         # Patrones: "Don/Doña NOMBRE APELLIDO", "Certifico que NOMBRE APELLIDO", "Nombre: ..."
-        name_match = re.search(r'(?:Don|Doña|D\.|Dña\.|Nombre)[:\s]+([A-ZÁÉÍÓÚÑ\s]+)', raw_text, re.IGNORECASE)
+        # Usamos [^\n] para no capturar saltos de línea y evitar capturar todo el documento
+        name_match = re.search(r'(?:Don|Doña|D\.|Dña\.|Nombre)[:\s]+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.]*)', raw_text, re.IGNORECASE)
         if name_match:
-             extracted_data["deceased_name"] = name_match.group(1).strip()
+             # Limpiar el nombre capturado (quitar "ha fallecido" u otros textos comunes si se colaron)
+             raw_name = name_match.group(1).strip()
+             # Si se usó IGNORECASE, podría haber capturado texto en minúsculas. 
+             # Una heurística es detenerse si encontramos palabras clave como "ha" "fallecido" "nacido"
+             # O simplemente tomar la primera línea
+             first_line_name = raw_name.split('\n')[0].strip()
+             
+             # Limpieza adicional de sufijos comunes si el regex fue muy codicioso
+             stop_words = [" ha ", " fallecio", " natural", " hijo", " dni", ","]
+             for word in stop_words:
+                 if word.lower() in first_line_name.lower():
+                     first_line_name = first_line_name.split(word)[0].strip(word).strip()
+            
+             extracted_data["deceased_name"] = first_line_name
              print(f"Nombre fallecido encontrado: {extracted_data['deceased_name']}")
 
         # Buscar DNI
@@ -134,7 +173,7 @@ def analyze_document(file_path: str, doc_type: str):
             except ValueError:
                 pass
 
-    elif doc_type == DocType.TESTAMENT:
+    elif doc_type in [DocType.TESTAMENT, DocType.DEED, DocType.LAST_WILL]:
         # Búsqueda muy básica de palabras clave
         heirs = []
         if "hijo" in raw_text.lower():
