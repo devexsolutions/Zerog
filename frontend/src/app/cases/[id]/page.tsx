@@ -200,6 +200,10 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const [assets, setAssets] = useState<Asset[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'assets' | 'documents' | 'distribution'>('overview');
   
+  // State for analyzing modal
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingMessage, setAnalyzingMessage] = useState('');
+
   // Estados para el progreso de carga de testamentos
   const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
   const [processingStatus, setProcessingStatus] = useState<{[key: string]: string}>({});
@@ -261,6 +265,15 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
     // Inicializar progreso para este tipo de documento
     setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
     setProcessingStatus(prev => ({ ...prev, [docType]: 'Subiendo archivo...' }));
+
+    // Mostrar modal de análisis para documentos complejos
+    if (['testamento', 'escritura', 'ultimas_voluntades'].includes(docType)) {
+      setIsAnalyzing(true);
+      setAnalyzingMessage('Examinando documento en búsqueda de bienes y herederos...');
+    } else if (docType === 'certificado_defuncion') {
+      setIsAnalyzing(true);
+      setAnalyzingMessage('Extrayendo datos del fallecido...');
+    }
 
     const formData = new FormData();
     formData.append('file', file);
@@ -347,6 +360,9 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       setProcessingStatus(prev => ({ ...prev, [docType]: '❌ Error de conexión' }));
       setUploadProgress(prev => ({ ...prev, [docType]: 0 }));
       toast.error("Error de conexión");
+    } finally {
+      setIsAnalyzing(false);
+      setAnalyzingMessage('');
     }
   };
 
@@ -968,8 +984,9 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
           {activeTab === 'documents' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
-                { id: 'DNI', label: 'DNI / Cert. Defunción', icon: CreditCard, desc: 'Sube el DNI del fallecido o certificado.' },
-                { id: 'testamento', label: 'Testamento / Últimas Voluntades', icon: FileText, desc: 'El sistema extraerá automáticamente los datos.' },
+                { id: 'DNI', label: 'DNI del Fallecido', icon: CreditCard, desc: 'Sube el DNI (anverso/reverso).' },
+                { id: 'certificado_defuncion', label: 'Certificado de Defunción', icon: FileCheck, desc: 'Para extraer fecha y datos automáticamente.' },
+                { id: 'testamento', label: 'Testamento / Últimas Voluntades', icon: FileText, desc: 'El sistema extraerá bienes y herederos.' },
                 { id: 'certificado_bancario', label: 'Certificados Bancarios', icon: Landmark, desc: 'Para acreditar saldos y posiciones.' },
                 { id: 'escritura', label: 'Escrituras de Propiedad', icon: MapPin, desc: 'Títulos de propiedad de inmuebles.' }
               ].map((doc) => (
@@ -1073,7 +1090,25 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
         </div>
       </div>
       
-      {/* OCR Report Modal */}
+      {/* Analyzing Modal */}
+          <Modal
+            isOpen={isAnalyzing}
+            onClose={() => {}} // Prevent closing while analyzing
+            title="Analizando Documento"
+            footer={null}
+          >
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <p className="text-gray-600 text-center font-medium animate-pulse">
+                {analyzingMessage || 'Procesando documento...'}
+              </p>
+              <p className="text-sm text-gray-400 text-center max-w-xs">
+                Esto puede tomar unos segundos mientras extraemos la información automáticamente.
+              </p>
+            </div>
+          </Modal>
+
+          {/* OCR Report Modal */}
       <Modal
         isOpen={!!ocrReport}
         onClose={() => setOcrReport(null)}
