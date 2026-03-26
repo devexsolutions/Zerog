@@ -6,8 +6,10 @@ from models import CaseStatus, DocStatus, DocType, AssetType
 # --- Heir Schemas ---
 class HeirBase(BaseModel):
     name: str
-    relationship: Optional[str] = None # Coincide con relationship_degree en modelo
-    share_percentage: float
+    nif: Optional[str] = None
+    age: Optional[int] = None
+    relationship_degree: Optional[str] = None
+    share_percentage: float = 0.0
     pre_existing_wealth: float = 0.0
     tax_percentage: Optional[float] = None
     fiscal_residence: Optional[str] = None
@@ -15,17 +17,26 @@ class HeirBase(BaseModel):
 class HeirCreate(HeirBase):
     pass
 
+class HeirUpdate(BaseModel):
+    name: Optional[str] = None
+    nif: Optional[str] = None
+    age: Optional[int] = None
+    relationship_degree: Optional[str] = None
+    share_percentage: Optional[float] = None
+    pre_existing_wealth: Optional[float] = None
+    tax_percentage: Optional[float] = None
+    fiscal_residence: Optional[str] = None
+
 class Heir(HeirBase):
     id: int
     case_id: int
-    relationship_degree: Optional[str] = None # Added to map from DB model
 
     class Config:
         from_attributes = True
 
 # --- Asset Schemas ---
 class AssetBase(BaseModel):
-    type: str # Changed from AssetType enum to str for flexibility, or keep AssetType if it covers REAL_ESTATE
+    type: str
     value: float
     is_ganancial: bool = False
     is_debt: bool = False
@@ -114,6 +125,14 @@ class CaseBase(BaseModel):
 class CaseCreate(CaseBase):
     pass
 
+class CaseUpdate(BaseModel):
+    status: Optional[CaseStatus] = None
+    deadline: Optional[datetime] = None
+    has_will: Optional[bool] = None
+    deceased_name: Optional[str] = None
+    deceased_dni: Optional[str] = None
+    date_of_death: Optional[datetime] = None
+
 class Case(CaseBase):
     id: int
     created_at: datetime
@@ -148,9 +167,10 @@ class User(BaseModel):
 class CalculationResult(BaseModel):
     total_assets: float
     total_debts: float
-    net_estate: float # Caudal Relicto
-    household_goods: float # Ajuar (3%)
-    taxable_base: float # Base Imponible Total
+    net_estate: float
+    household_goods: float
+    taxable_base: float
+    ganancial_deduction: float = 0.0  # Deducción por bienes gananciales
 
 class HeirDistribution(BaseModel):
     heir_id: int
@@ -159,10 +179,12 @@ class HeirDistribution(BaseModel):
     share_percentage: float
     quota_value: float
     tax_base: float
-    # Tax Fields
     reductions: float = 0.0
+    quota_integra: float = 0.0
+    multiplier: float = 1.0
     tax_quota: float = 0.0
     total_to_pay: float = 0.0
+    pre_existing_wealth: float = 0.0
 
 class DistributionResult(BaseModel):
     estate_summary: CalculationResult

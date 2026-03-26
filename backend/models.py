@@ -39,18 +39,18 @@ class Case(Base):
     __tablename__ = "cases"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True) # Auth0/Clerk ID
+    user_id = Column(String, index=True)
     status = Column(Enum(CaseStatus), default=CaseStatus.PENDING)
     deadline = Column(DateTime)
-    deceased_name = Column(String, nullable=True) # Nombre del fallecido
-    deceased_dni = Column(String, nullable=True) # DNI del fallecido
-    date_of_death = Column(DateTime, nullable=True) # Fecha de defunción para plazos
-    has_will = Column(Boolean, default=False) # ¿Tiene testamento?
+    deceased_name = Column(String, nullable=True)
+    deceased_dni = Column(String, nullable=True)
+    date_of_death = Column(DateTime, nullable=True)
+    has_will = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    heirs = relationship("Heir", back_populates="case")
-    assets = relationship("Asset", back_populates="case")
-    docs = relationship("Doc", back_populates="case")
+    heirs = relationship("Heir", back_populates="case", cascade="all, delete-orphan")
+    assets = relationship("Asset", back_populates="case", cascade="all, delete-orphan")
+    docs = relationship("Doc", back_populates="case", cascade="all, delete-orphan")
 
 class Heir(Base):
     __tablename__ = "heirs"
@@ -58,14 +58,16 @@ class Heir(Base):
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("cases.id"))
     name = Column(String)
-    relationship_degree = Column(String) # Grado de parentesco
-    fiscal_residence = Column(String, nullable=True) # Residencia fiscal (CCAA)
-    
+    nif = Column(String, nullable=True)          # NIF del heredero
+    age = Column(Integer, nullable=True)          # Edad (Grupo I si < 21)
+    relationship_degree = Column(String)          # Grado de parentesco
+    fiscal_residence = Column(String, nullable=True)  # CCAA de residencia fiscal
+
     # Distribution
-    share_percentage = Column(Float, default=0.0) # Porcentaje de participación (0-100)
-    
-    # Tax Calculation (Optional for now)
-    tax_percentage = Column(Float, nullable=True) # Tipo impositivo aplicable
+    share_percentage = Column(Float, default=0.0)
+
+    # Tax Calculation
+    tax_percentage = Column(Float, nullable=True)
     pre_existing_wealth = Column(Float, default=0.0)
 
     case = relationship("Case", back_populates="heirs")
@@ -75,19 +77,19 @@ class Asset(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("cases.id"))
-    type = Column(String) # Changed from Enum to String for flexibility
+    type = Column(String)
     value = Column(Float)
     is_ganancial = Column(Boolean, default=False)
-    is_debt = Column(Boolean, default=False) # ¿Es deuda/pasivo?
-    is_funeral_expense = Column(Boolean, default=False) # ¿Es gasto de sepelio?
+    is_debt = Column(Boolean, default=False)
+    is_funeral_expense = Column(Boolean, default=False)
     description = Column(String, nullable=True)
-    
+
     # Catastro fields
     cadastral_reference = Column(String, nullable=True)
     address = Column(String, nullable=True)
     surface = Column(Float, nullable=True)
     usage = Column(String, nullable=True)
-    reference_value = Column(Float, nullable=True, default=0.0) # Valor de Referencia de Catastro
+    reference_value = Column(Float, nullable=True, default=0.0)
 
     case = relationship("Case", back_populates="assets")
 
@@ -96,11 +98,11 @@ class Doc(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("cases.id"))
-    type = Column(Enum(DocType), default=DocType.OTHER) # Tipo de documento para checklist
+    type = Column(Enum(DocType), default=DocType.OTHER)
     file_url = Column(String)
     status = Column(Enum(DocStatus), default=DocStatus.PENDING)
     is_verified = Column(Boolean, default=False)
-    
+
     case = relationship("Case", back_populates="docs")
 
 class User(Base):
@@ -110,7 +112,3 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
-    
-    # Para SaaS Multi-tenant, podríamos tener un tenant_id
-    # Por ahora, user_id en Case es el link.
-
