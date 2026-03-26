@@ -4,7 +4,8 @@ import { useState, useEffect, use } from 'react';
 import { 
   ArrowLeft, Upload, CheckCircle, AlertCircle, Clock, FileText, 
   Calculator, Landmark, Download, Users, Search, Plus, MapPin, 
-  Trash2, Calendar, CreditCard, ChevronRight, FileCheck, Euro
+  Trash2, Calendar, CreditCard, ChevronRight, FileCheck, Euro,
+  Edit2, X, Save, UserPlus, Info
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -124,6 +125,38 @@ interface Case {
   has_will: boolean;
 }
 
+interface Heir {
+  id: number;
+  case_id: number;
+  name: string;
+  nif: string | null;
+  age: number | null;
+  relationship_degree: string | null;
+  share_percentage: number;
+  pre_existing_wealth: number;
+  fiscal_residence: string | null;
+}
+
+const CCAA_OPTIONS = [
+  "Madrid", "Cataluna", "Andalucia", "Valencia", "Galicia",
+  "Castilla Leon", "Castilla La Mancha", "Aragon", "Canarias",
+  "Murcia", "Asturias", "Baleares", "Extremadura", "Navarra",
+  "Cantabria", "La Rioja", "Pais Vasco", "Estado"
+];
+
+const PARENTESCO_OPTIONS = [
+  { value: "hijo", label: "Hijo/a" },
+  { value: "conyuge", label: "Cónyuge" },
+  { value: "padre", label: "Padre/Madre" },
+  { value: "nieto", label: "Nieto/a" },
+  { value: "abuelo", label: "Abuelo/a" },
+  { value: "hermano", label: "Hermano/a" },
+  { value: "sobrino", label: "Sobrino/a" },
+  { value: "tio", label: "Tío/a" },
+  { value: "cuñado", label: "Cuñado/a" },
+  { value: "otro", label: "Otro" },
+];
+
 interface ChecklistItem {
   type: string;
   label: string;
@@ -198,8 +231,33 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
   const [marketValue, setMarketValue] = useState(0);
   const [referenceValue, setReferenceValue] = useState(0);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'assets' | 'documents' | 'distribution'>('overview');
-  
+  const [activeTab, setActiveTab] = useState<'overview' | 'heirs' | 'assets' | 'documents' | 'distribution'>('overview');
+  const [heirs, setHeirs] = useState<Heir[]>([]);
+
+  // Estado para edición del causante
+  const [isEditingCase, setIsEditingCase] = useState(false);
+  const [editCaseForm, setEditCaseForm] = useState({
+    deceased_name: '',
+    deceased_dni: '',
+    date_of_death: '',
+    has_will: false,
+    status: '',
+  });
+
+  // Estado para modal de heredero (nuevo / editar)
+  const [heirModalOpen, setHeirModalOpen] = useState(false);
+  const [editingHeir, setEditingHeir] = useState<Heir | null>(null);
+  const [heirForm, setHeirForm] = useState({
+    name: '',
+    nif: '',
+    age: '',
+    relationship_degree: 'hijo',
+    share_percentage: '',
+    pre_existing_wealth: '',
+    fiscal_residence: 'Madrid',
+  });
+  const [savingHeir, setSavingHeir] = useState(false);
+
   // State for analyzing modal
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzingMessage, setAnalyzingMessage] = useState('');
@@ -227,34 +285,171 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
   const fetchData = async () => {
     try {
-      const headers = {
-        'Authorization': `Bearer ${token}`
-      };
+      const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [caseRes, checkRes, calcRes, distRes, assetsRes] = await Promise.all([
+      const [caseRes, checkRes, calcRes, distRes, assetsRes, heirsRes] = await Promise.all([
         fetch(`${API_URL}/cases/${caseId}`, { headers }),
         fetch(`${API_URL}/cases/${caseId}/checklist`, { headers }),
         fetch(`${API_URL}/cases/${caseId}/calculate`, { headers }),
         fetch(`${API_URL}/cases/${caseId}/distribution`, { headers }),
-        fetch(`${API_URL}/cases/${caseId}/assets/`, { headers })
+        fetch(`${API_URL}/cases/${caseId}/assets/`, { headers }),
+        fetch(`${API_URL}/cases/${caseId}/heirs/`, { headers }),
       ]);
 
-      if (caseRes.status === 401 || checkRes.status === 401 || calcRes.status === 401 || assetsRes.status === 401) {
-          logout();
-          return;
+      if ([caseRes, checkRes, calcRes, assetsRes].some(r => r.status === 401)) {
+        logout();
+        return;
       }
 
-      if (caseRes.ok) setCaseData(await caseRes.json());
+      if (caseRes.ok) {
+        const caseJson = await caseRes.json();
+        setCaseData(caseJson);
+        // Sincronizar form de edición con datos reales
+        setEditCaseForm({
+          deceased_name: caseJson.deceased_name || '',
+          deceased_dni: caseJson.deceased_dni || '',
+          date_of_death: caseJson.date_of_death
+            ? new Date(caseJson.date_of_death).toISOString().split('T')[0]
+            : '',
+          has_will: caseJson.has_will || false,
+          status: caseJson.status || 'PENDIENTE',
+        });
+      }
       if (checkRes.ok) setChecklist(await checkRes.json());
       if (calcRes.ok) setCalculation(await calcRes.json());
       if (distRes.ok) setDistribution(await distRes.json());
       if (assetsRes.ok) setAssets(await assetsRes.json());
+      if (heirsRes.ok) setHeirs(await heirsRes.json());
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
     }
   };
+
+  // --- Funciones edición del Causante ---
+  const handleSaveCase = async () => {
+    try {
+      const payload: Record<string, any> = {
+        deceased_name: editCaseForm.deceased_name || null,
+        deceased_dni: editCaseForm.deceased_dni || null,
+        has_will: editCaseForm.has_will,
+        status: editCaseForm.status,
+      };
+      if (editCaseForm.date_of_death) {
+        payload.date_of_death = new Date(editCaseForm.date_of_death).toISOString();
+      } else {
+        payload.date_of_death = null;
+      }
+
+      const res = await fetch(`${API_URL}/cases/${caseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast.success('Datos del expediente actualizados');
+        setIsEditingCase(false);
+        fetchData();
+      } else {
+        const err = await res.json();
+        toast.error(`Error: ${err.detail || 'No se pudo guardar'}`);
+      }
+    } catch (e) {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // --- Funciones Herederos ---
+  const openNewHeirModal = () => {
+    setEditingHeir(null);
+    setHeirForm({ name: '', nif: '', age: '', relationship_degree: 'hijo', share_percentage: '', pre_existing_wealth: '', fiscal_residence: 'Madrid' });
+    setHeirModalOpen(true);
+  };
+
+  const openEditHeirModal = (heir: Heir) => {
+    setEditingHeir(heir);
+    setHeirForm({
+      name: heir.name,
+      nif: heir.nif || '',
+      age: heir.age !== null ? String(heir.age) : '',
+      relationship_degree: heir.relationship_degree || 'hijo',
+      share_percentage: String(heir.share_percentage),
+      pre_existing_wealth: String(heir.pre_existing_wealth || 0),
+      fiscal_residence: heir.fiscal_residence || 'Madrid',
+    });
+    setHeirModalOpen(true);
+  };
+
+  const handleSaveHeir = async () => {
+    if (!heirForm.name.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+    const share = parseFloat(heirForm.share_percentage) || 0;
+    if (share < 0 || share > 100) {
+      toast.error('El porcentaje debe estar entre 0 y 100');
+      return;
+    }
+
+    setSavingHeir(true);
+    try {
+      const payload = {
+        name: heirForm.name.trim().toUpperCase(),
+        nif: heirForm.nif.trim() || null,
+        age: heirForm.age ? parseInt(heirForm.age) : null,
+        relationship_degree: heirForm.relationship_degree,
+        share_percentage: share,
+        pre_existing_wealth: parseFloat(heirForm.pre_existing_wealth) || 0,
+        fiscal_residence: heirForm.fiscal_residence,
+      };
+
+      const url = editingHeir
+        ? `${API_URL}/cases/${caseId}/heirs/${editingHeir.id}`
+        : `${API_URL}/cases/${caseId}/heirs/`;
+      const method = editingHeir ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        toast.success(editingHeir ? 'Heredero actualizado' : 'Heredero añadido correctamente');
+        setHeirModalOpen(false);
+        fetchData();
+      } else {
+        const err = await res.json();
+        toast.error(`Error: ${err.detail || 'No se pudo guardar'}`);
+      }
+    } catch (e) {
+      toast.error('Error de conexión');
+    } finally {
+      setSavingHeir(false);
+    }
+  };
+
+  const handleDeleteHeir = async (heirId: number, heirName: string) => {
+    if (!confirm(`¿Eliminar al heredero "${heirName}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await fetch(`${API_URL}/cases/${caseId}/heirs/${heirId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok || res.status === 204) {
+        toast.success('Heredero eliminado');
+        fetchData();
+      } else {
+        toast.error('No se pudo eliminar el heredero');
+      }
+    } catch (e) {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // Calcular total de porcentajes
+  const totalSharePercentage = heirs.reduce((sum, h) => sum + (h.share_percentage || 0), 0);
 
   const handleFileUpload = async (file: File, docType: string) => {
     // Si es DNI, forzar validación simulada
@@ -636,39 +831,138 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       <div className="space-y-6">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
               <Link href="/" className="hover:text-blue-600 transition-colors">Expedientes</Link>
               <ChevronRight size={14} />
               <span>#{caseData.id}</span>
             </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">{caseData.deceased_name || 'Sin nombre'}</h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                caseData.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-              }`}>
-                {caseData.status === 'open' ? 'Abierto' : 'Cerrado'}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-gray-500">
-              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                <Calendar size={16} className="text-blue-600"/> 
-                <span className="font-medium">Fallecimiento:</span> {caseData.date_of_death}
-              </div>
-              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                <CreditCard size={16} className="text-purple-600"/> 
-                <span className="font-medium">DNI:</span> {caseData.deceased_dni}
-              </div>
-              {deadlineDate && (
-                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                  <Clock size={16} className="text-orange-600"/> 
-                  <span className="font-medium">Plazo:</span> {deadlineDate.toLocaleDateString()}
+
+            {!isEditingCase ? (
+              <>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-3xl font-bold text-gray-900">{caseData.deceased_name || 'Sin nombre'}</h1>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    caseData.status === 'ABIERTO' ? 'bg-green-100 text-green-800' :
+                    caseData.status === 'CERRADO' ? 'bg-gray-100 text-gray-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {caseData.status}
+                  </span>
+                  <button
+                    onClick={() => setIsEditingCase(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                  >
+                    <Edit2 size={12} />
+                    Editar
+                  </button>
                 </div>
-              )}
-            </div>
+                <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-gray-500">
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                    <Calendar size={16} className="text-blue-600"/>
+                    <span className="font-medium">Fallecimiento:</span>
+                    {caseData.date_of_death
+                      ? new Date(caseData.date_of_death).toLocaleDateString('es-ES')
+                      : <span className="italic text-gray-400">No definida</span>}
+                  </div>
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                    <CreditCard size={16} className="text-purple-600"/>
+                    <span className="font-medium">DNI:</span>
+                    {caseData.deceased_dni || <span className="italic text-gray-400">No definido</span>}
+                  </div>
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                    <FileCheck size={16} className="text-indigo-600"/>
+                    <span className="font-medium">Testamento:</span>
+                    <span className={caseData.has_will ? 'text-green-600' : 'text-gray-500'}>
+                      {caseData.has_will ? 'Sí' : 'No'}
+                    </span>
+                  </div>
+                  {deadlineDate && (
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                      <Clock size={16} className="text-orange-600"/>
+                      <span className="font-medium">Plazo:</span> {deadlineDate.toLocaleDateString('es-ES')}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm mt-2">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Edit2 size={16} className="text-blue-600" />
+                  Editar datos del causante
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Nombre completo</label>
+                    <input
+                      type="text"
+                      value={editCaseForm.deceased_name}
+                      onChange={e => setEditCaseForm(p => ({ ...p, deceased_name: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="NOMBRE APELLIDO1 APELLIDO2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">DNI / NIF</label>
+                    <input
+                      type="text"
+                      value={editCaseForm.deceased_dni}
+                      onChange={e => setEditCaseForm(p => ({ ...p, deceased_dni: e.target.value.toUpperCase() }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="12345678A"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de fallecimiento</label>
+                    <input
+                      type="date"
+                      value={editCaseForm.date_of_death}
+                      onChange={e => setEditCaseForm(p => ({ ...p, date_of_death: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
+                    <select
+                      value={editCaseForm.status}
+                      onChange={e => setEditCaseForm(p => ({ ...p, status: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="PENDIENTE">Pendiente</option>
+                      <option value="ABIERTO">Abierto</option>
+                      <option value="CERRADO">Cerrado</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3 pt-5">
+                    <input
+                      type="checkbox"
+                      id="has_will"
+                      checked={editCaseForm.has_will}
+                      onChange={e => setEditCaseForm(p => ({ ...p, has_will: e.target.checked }))}
+                      className="w-4 h-4 text-blue-600 rounded"
+                    />
+                    <label htmlFor="has_will" className="text-sm font-medium text-gray-700">Existe testamento</label>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-4 justify-end">
+                  <button
+                    onClick={() => setIsEditingCase(false)}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <X size={14} /> Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveCase}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    <Save size={14} /> Guardar cambios
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 shrink-0">
             <button 
               onClick={handleDownloadReport}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors shadow-sm"
@@ -695,22 +989,25 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
         {/* Content Tabs */}
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {['overview', 'assets', 'documents', 'distribution'].map((tab) => (
+          <nav className="-mb-px flex space-x-6 overflow-x-auto">
+            {[
+              { id: 'overview', label: 'Resumen' },
+              { id: 'heirs', label: `Herederos ${heirs.length > 0 ? `(${heirs.length})` : ''}` },
+              { id: 'assets', label: 'Inventario' },
+              { id: 'documents', label: 'Documentación' },
+              { id: 'distribution', label: 'Reparto' },
+            ].map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
                 className={`
                   whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors
-                  ${activeTab === tab
+                  ${activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                 `}
               >
-                {tab === 'overview' && 'Resumen General'}
-                {tab === 'assets' && 'Inventario de Bienes'}
-                {tab === 'documents' && 'Documentación'}
-                {tab === 'distribution' && 'Reparto y Adjudicación'}
+                {tab.label}
               </button>
             ))}
           </nav>
@@ -824,6 +1121,128 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
             </div>
           )}
 
+          {/* HEIRS TAB */}
+          {activeTab === 'heirs' && (
+            <div className="space-y-4">
+              {/* Barra superior */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Gestión de Herederos</h2>
+                  <p className="text-sm text-gray-500">Añade, edita o elimina los herederos del expediente.</p>
+                </div>
+                <button
+                  onClick={openNewHeirModal}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
+                >
+                  <UserPlus size={16} />
+                  Añadir heredero
+                </button>
+              </div>
+
+              {/* Alerta de porcentaje */}
+              {heirs.length > 0 && (
+                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium ${
+                  Math.abs(totalSharePercentage - 100) < 0.01
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : totalSharePercentage > 100
+                    ? 'bg-red-50 text-red-700 border border-red-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  <Info size={16} />
+                  Total cuotas: <strong className="ml-1">{totalSharePercentage.toFixed(2)}%</strong>
+                  {Math.abs(totalSharePercentage - 100) < 0.01
+                    ? ' — ✓ Las cuotas suman 100%'
+                    : totalSharePercentage > 100
+                    ? ' — ⚠️ Las cuotas superan el 100%'
+                    : ` — Quedan ${(100 - totalSharePercentage).toFixed(2)}% sin asignar`}
+                </div>
+              )}
+
+              {/* Tabla de herederos */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                {heirs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <Users size={48} className="mb-3 opacity-30" />
+                    <p className="font-medium">No hay herederos registrados</p>
+                    <p className="text-sm mt-1">Puedes añadirlos manualmente o subirán automáticamente al procesar un testamento.</p>
+                    <button
+                      onClick={openNewHeirModal}
+                      className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                    >
+                      <UserPlus size={15} />
+                      Añadir primer heredero
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                        <tr>
+                          <th className="px-5 py-3">Nombre</th>
+                          <th className="px-5 py-3">NIF</th>
+                          <th className="px-5 py-3">Parentesco</th>
+                          <th className="px-5 py-3 text-center">Edad</th>
+                          <th className="px-5 py-3 text-right">Cuota (%)</th>
+                          <th className="px-5 py-3">CCAA Fiscal</th>
+                          <th className="px-5 py-3 text-right">Patrim. Previo</th>
+                          <th className="px-5 py-3 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {heirs.map((heir) => (
+                          <tr key={heir.id} className="hover:bg-gray-50 transition-colors group">
+                            <td className="px-5 py-3 font-medium text-gray-900">{heir.name}</td>
+                            <td className="px-5 py-3 text-gray-500 font-mono text-xs">
+                              {heir.nif || <span className="italic text-gray-300">—</span>}
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="capitalize px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                                {PARENTESCO_OPTIONS.find(p => p.value === heir.relationship_degree)?.label || heir.relationship_degree}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-center text-gray-500">
+                              {heir.age ?? <span className="italic text-gray-300">—</span>}
+                              {heir.age !== null && heir.age < 21 && (
+                                <span className="ml-1 text-xs text-green-600 font-medium">(Grupo I)</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3 text-right font-semibold text-gray-800">
+                              {heir.share_percentage}%
+                            </td>
+                            <td className="px-5 py-3 text-gray-500 text-xs">
+                              {heir.fiscal_residence || <span className="italic text-gray-300">—</span>}
+                            </td>
+                            <td className="px-5 py-3 text-right text-gray-500 text-xs">
+                              {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(heir.pre_existing_wealth || 0)}
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => openEditHeirModal(heir)}
+                                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Editar heredero"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteHeir(heir.id, heir.name)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Eliminar heredero"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ASSETS TAB */}
           {activeTab === 'assets' && (
             <div className="space-y-6">
@@ -914,37 +1333,56 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                   <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3">Descripción</th>
-                        <th className="px-6 py-3">Tipo</th>
-                        <th className="px-6 py-3 text-right">Valor Mercado</th>
-                        <th className="px-6 py-3 text-right">Valor Ref.</th>
-                        <th className="px-6 py-3 text-center">Acciones</th>
+                        <th className="px-5 py-3">Descripción</th>
+                        <th className="px-5 py-3">Tipo</th>
+                        <th className="px-5 py-3 text-center">Ganancial</th>
+                        <th className="px-5 py-3 text-right">Valor Mercado</th>
+                        <th className="px-5 py-3 text-right">Valor Ref.</th>
+                        <th className="px-5 py-3 text-center">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {assets.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                          <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                             No hay bienes registrados todavía.
                           </td>
                         </tr>
                       ) : (
                         assets.map((asset) => (
                           <tr key={asset.id} className="hover:bg-gray-50 transition-colors group">
-                            <td className="px-6 py-4">
-                              <div className="font-medium text-gray-900">{asset.description}</div>
+                            <td className="px-5 py-3">
+                              <div className="font-medium text-gray-900 text-sm">{asset.description}</div>
                               {asset.cadastral_reference && (
                                 <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                   <MapPin size={10} /> {asset.cadastral_reference}
                                 </div>
                               )}
+                              {asset.is_debt && <span className="text-xs text-red-500 font-medium">Deuda/Pasivo</span>}
+                              {asset.is_funeral_expense && <span className="text-xs text-orange-500 font-medium">Gasto sepelio</span>}
                             </td>
-                            <td className="px-6 py-4">
-                              <span className="capitalize px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">
+                            <td className="px-5 py-3">
+                              <span className="capitalize px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
                                 {asset.type}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="px-5 py-3 text-center">
+                              <button
+                                onClick={() => handleUpdateAsset(asset.id, 'is_ganancial', !asset.is_ganancial)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                  asset.is_ganancial ? 'bg-orange-400' : 'bg-gray-200'
+                                }`}
+                                title={asset.is_ganancial ? 'Ganancial (50% en masa)' : 'Bien privativo (100%)'}
+                              >
+                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                  asset.is_ganancial ? 'translate-x-4' : 'translate-x-1'
+                                }`} />
+                              </button>
+                              {asset.is_ganancial && (
+                                <div className="text-xs text-orange-500 mt-0.5">50%</div>
+                              )}
+                            </td>
+                            <td className="px-5 py-3 text-right">
                               <div className="w-32 ml-auto p-1 rounded hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 transition-all cursor-text">
                                 <CurrencyInput 
                                   value={asset.value} 
@@ -952,7 +1390,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                 />
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="px-5 py-3 text-right">
                               <div className="w-32 ml-auto p-1 rounded hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 transition-all cursor-text">
                                 <CurrencyInput 
                                   value={asset.reference_value || 0} 
@@ -961,7 +1399,7 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
                                 />
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-center">
+                            <td className="px-5 py-3 text-center">
                               <button
                                 onClick={() => handleDeleteAsset(asset.id)}
                                 className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50 opacity-0 group-hover:opacity-100"
@@ -1036,54 +1474,107 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
 
           {/* DISTRIBUTION TAB */}
           {activeTab === 'distribution' && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h3 className="font-semibold text-gray-900">Cuadro de Reparto</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3">Heredero</th>
-                      <th className="px-6 py-3">Parentesco</th>
-                      <th className="px-6 py-3 text-right">Cuota (%)</th>
-                      <th className="px-6 py-3 text-right">Base Imponible</th>
-                      <th className="px-6 py-3 text-right">A Pagar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {!distribution?.heirs_distribution?.length ? (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                          No hay datos de reparto disponibles. Asegúrate de añadir herederos y bienes.
-                        </td>
-                      </tr>
-                    ) : (
-                      distribution.heirs_distribution.map((heir) => (
-                        <tr key={heir.heir_id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-900">{heir.name}</td>
-                          <td className="px-6 py-4 text-gray-500 capitalize">{heir.relationship}</td>
-                          <td className="px-6 py-4 text-right font-medium">{heir.share_percentage}%</td>
-                          <td className="px-6 py-4 text-right text-gray-900">{formatCurrency(heir.tax_base)}</td>
-                          <td className="px-6 py-4 text-right font-bold text-blue-600">{formatCurrency(heir.total_to_pay)}</td>
-                        </tr>
-                      ))
+            <div className="space-y-4">
+              {/* Resumen masa hereditaria */}
+              {distribution?.estate_summary && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                  <h3 className="font-semibold text-gray-900 mb-3">Liquidación de la Masa Hereditaria</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-gray-500 text-xs mb-1">Total Activo Bruto</p>
+                      <p className="font-bold text-gray-900">{formatCurrency(distribution.estate_summary.total_assets)}</p>
+                    </div>
+                    {(distribution.estate_summary as any).ganancial_deduction > 0 && (
+                      <div className="bg-orange-50 rounded-lg p-3">
+                        <p className="text-orange-600 text-xs mb-1">(-) Gananciales (50%)</p>
+                        <p className="font-bold text-orange-700">-{formatCurrency((distribution.estate_summary as any).ganancial_deduction)}</p>
+                      </div>
                     )}
-                  </tbody>
-                  {distribution && distribution.heirs_distribution && distribution.heirs_distribution.length > 0 && (
-                    <tfoot className="bg-gray-50 font-semibold text-gray-900 border-t border-gray-200">
+                    <div className="bg-red-50 rounded-lg p-3">
+                      <p className="text-red-500 text-xs mb-1">(-) Deudas y Gastos</p>
+                      <p className="font-bold text-red-700">-{formatCurrency(distribution.estate_summary.total_debts)}</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-blue-600 text-xs mb-1">Ajuar Dom. (3%)</p>
+                      <p className="font-bold text-blue-700">+{formatCurrency(distribution.estate_summary.household_goods)}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <p className="text-green-600 text-xs mb-1">Base Imponible Total</p>
+                      <p className="font-bold text-green-700 text-base">{formatCurrency(distribution.estate_summary.taxable_base)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabla de reparto */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900">Cuadro de Reparto e Impuesto de Sucesiones</h3>
+                  <span className="text-xs text-gray-400">Normativa estatal Ley 29/1987</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                       <tr>
-                        <td colSpan={3} className="px-6 py-4 text-right">TOTALES</td>
-                        <td className="px-6 py-4 text-right">
-                          {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.tax_base, 0))}
-                        </td>
-                        <td className="px-6 py-4 text-right text-blue-700">
-                          {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.total_to_pay, 0))}
-                        </td>
+                        <th className="px-4 py-3">Heredero</th>
+                        <th className="px-4 py-3">Parentesco</th>
+                        <th className="px-4 py-3 text-right">Cuota (%)</th>
+                        <th className="px-4 py-3 text-right">Valor Cuota</th>
+                        <th className="px-4 py-3 text-right">Base Imponible</th>
+                        <th className="px-4 py-3 text-right">(-) Reducciones</th>
+                        <th className="px-4 py-3 text-right">Cuota Íntegra</th>
+                        <th className="px-4 py-3 text-right">Coef. Mult.</th>
+                        <th className="px-4 py-3 text-right font-semibold text-blue-700">A Pagar</th>
                       </tr>
-                    </tfoot>
-                  )}
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {!distribution?.heirs_distribution?.length ? (
+                        <tr>
+                          <td colSpan={9} className="px-6 py-10 text-center text-gray-400">
+                            <Users size={36} className="mx-auto mb-2 opacity-30" />
+                            No hay datos de reparto. Añade herederos y bienes al expediente.
+                          </td>
+                        </tr>
+                      ) : (
+                        distribution.heirs_distribution.map((heir) => (
+                          <tr key={heir.heir_id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 font-medium text-gray-900">{heir.name}</td>
+                            <td className="px-4 py-3 text-gray-500 capitalize text-xs">{
+                              PARENTESCO_OPTIONS.find(p => p.value === heir.relationship)?.label || heir.relationship
+                            }</td>
+                            <td className="px-4 py-3 text-right">{heir.share_percentage}%</td>
+                            <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(heir.quota_value)}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(heir.tax_base)}</td>
+                            <td className="px-4 py-3 text-right text-green-700">-{formatCurrency(heir.reductions)}</td>
+                            <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(heir.quota_integra || 0)}</td>
+                            <td className="px-4 py-3 text-right text-gray-500 text-xs">{heir.multiplier?.toFixed(4) || '1.0000'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-blue-600 text-base">{formatCurrency(heir.total_to_pay)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    {distribution && distribution.heirs_distribution && distribution.heirs_distribution.length > 0 && (
+                      <tfoot className="bg-gray-50 font-semibold text-gray-900 border-t-2 border-gray-300">
+                        <tr>
+                          <td colSpan={4} className="px-4 py-3 text-right text-gray-500">TOTALES</td>
+                          <td className="px-4 py-3 text-right">
+                            {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.tax_base, 0))}
+                          </td>
+                          <td className="px-4 py-3 text-right text-green-700">
+                            -{formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.reductions, 0))}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + (h.quota_integra || 0), 0))}
+                          </td>
+                          <td className="px-4 py-3"></td>
+                          <td className="px-4 py-3 text-right text-blue-700 text-base">
+                            {formatCurrency(distribution.heirs_distribution.reduce((acc, h) => acc + h.total_to_pay, 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -1124,6 +1615,142 @@ export default function CaseDetail({ params }: { params: Promise<{ id: string }>
       >
         <div className="whitespace-pre-wrap text-sm text-gray-700 font-mono bg-gray-50 p-4 rounded-lg border border-gray-100">
           {ocrReport?.content}
+        </div>
+      </Modal>
+
+      {/* Modal Heredero (nuevo / editar) */}
+      <Modal
+        isOpen={heirModalOpen}
+        onClose={() => setHeirModalOpen(false)}
+        title={editingHeir ? 'Editar Heredero' : 'Añadir Heredero'}
+        footer={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setHeirModalOpen(false)}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSaveHeir}
+              disabled={savingHeir}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              <Save size={14} />
+              {savingHeir ? 'Guardando...' : editingHeir ? 'Actualizar' : 'Añadir heredero'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Nombre completo <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={heirForm.name}
+                onChange={e => setHeirForm(p => ({ ...p, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="NOMBRE APELLIDO1 APELLIDO2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">NIF / DNI del heredero</label>
+              <input
+                type="text"
+                value={heirForm.nif}
+                onChange={e => setHeirForm(p => ({ ...p, nif: e.target.value.toUpperCase() }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="12345678A"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Edad <span className="text-gray-400 font-normal">(importante si &lt; 21 años)</span>
+              </label>
+              <input
+                type="number"
+                value={heirForm.age}
+                onChange={e => setHeirForm(p => ({ ...p, age: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="Ej: 35"
+                min="0" max="120"
+              />
+              {heirForm.age && parseInt(heirForm.age) < 21 && (
+                <p className="text-xs text-green-600 mt-1">✓ Aplicará reducción adicional Grupo I (menor de 21 años)</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Parentesco</label>
+              <select
+                value={heirForm.relationship_degree}
+                onChange={e => setHeirForm(p => ({ ...p, relationship_degree: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {PARENTESCO_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                CCAA Residencia Fiscal
+                <span className="text-gray-400 font-normal ml-1">(afecta al impuesto)</span>
+              </label>
+              <select
+                value={heirForm.fiscal_residence}
+                onChange={e => setHeirForm(p => ({ ...p, fiscal_residence: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {CCAA_OPTIONS.map(ccaa => (
+                  <option key={ccaa} value={ccaa}>{ccaa}</option>
+                ))}
+              </select>
+              {heirForm.fiscal_residence === 'Madrid' && (
+                <p className="text-xs text-blue-600 mt-1">ℹ️ Madrid: bonificación 99% en cuota</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Cuota / Porcentaje (%) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                value={heirForm.share_percentage}
+                onChange={e => setHeirForm(p => ({ ...p, share_percentage: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="33.33"
+                min="0" max="100" step="0.01"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Patrimonio preexistente (€)
+                <span className="text-gray-400 font-normal ml-1">(afecta al coeficiente)</span>
+              </label>
+              <input
+                type="number"
+                value={heirForm.pre_existing_wealth}
+                onChange={e => setHeirForm(p => ({ ...p, pre_existing_wealth: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="0"
+                min="0" step="1000"
+              />
+            </div>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700 border border-blue-100">
+            <strong>Grupos de parentesco (LISD):</strong><br/>
+            <span className="text-blue-600">Grupo I</span>: Descendientes &lt;21 años · <span className="text-blue-600">Grupo II</span>: Descendientes ≥21, cónyuge, ascendientes · <span className="text-blue-600">Grupo III</span>: Colaterales 2º/3º · <span className="text-blue-600">Grupo IV</span>: Resto
+          </div>
         </div>
       </Modal>
 

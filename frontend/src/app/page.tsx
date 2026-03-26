@@ -14,6 +14,8 @@ interface Case {
   deadline: string | null;
   created_at: string;
   date_of_death: string | null;
+  deceased_name: string | null;
+  deceased_dni: string | null;
 }
 
 export default function Home() {
@@ -22,6 +24,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [newCaseUserId, setNewCaseUserId] = useState('');
+  const [newCaseDeceasedName, setNewCaseDeceasedName] = useState('');
+  const [newCaseDeceasedDni, setNewCaseDeceasedDni] = useState('');
+  const [newCaseDateOfDeath, setNewCaseDateOfDeath] = useState('');
+  const [newCaseHasWill, setNewCaseHasWill] = useState(false);
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, OPEN, CLOSED, RISK
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -114,18 +120,32 @@ export default function Home() {
   };
 
   const createCase = async () => {
-    if (!newCaseUserId) return;
     try {
+      const payload: Record<string, any> = {
+        user_id: newCaseDeceasedDni || 'pending',
+        status: 'ABIERTO',
+        deceased_name: newCaseDeceasedName || null,
+        deceased_dni: newCaseDeceasedDni || null,
+        has_will: newCaseHasWill,
+      };
+      if (newCaseDateOfDeath) {
+        payload.date_of_death = new Date(newCaseDateOfDeath).toISOString();
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/cases/`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ user_id: newCaseUserId, status: 'ABIERTO' }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setNewCaseUserId('');
+        setNewCaseDeceasedName('');
+        setNewCaseDeceasedDni('');
+        setNewCaseDateOfDeath('');
+        setNewCaseHasWill(false);
         fetchCases();
         (document.getElementById('new-case-modal') as HTMLDialogElement)?.close();
       }
@@ -280,8 +300,12 @@ export default function Home() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-900">{caseItem.user_id}</span>
-                            <span className="text-xs text-gray-500">DNI: {caseItem.user_id}</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {caseItem.deceased_name || <span className="italic text-gray-400">Sin nombre</span>}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {caseItem.deceased_dni ? `DNI: ${caseItem.deceased_dni}` : `Exp. #${caseItem.id}`}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -346,16 +370,45 @@ export default function Home() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DNI del Cliente / Causante</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo del causante</label>
+                <input
+                  type="text"
+                  placeholder="NOMBRE APELLIDO1 APELLIDO2"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={newCaseDeceasedName}
+                  onChange={(e) => setNewCaseDeceasedName(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DNI / NIF del causante</label>
                 <input
                   type="text"
                   placeholder="12345678A"
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  value={newCaseUserId}
-                  onChange={(e) => setNewCaseUserId(e.target.value)}
+                  value={newCaseDeceasedDni}
+                  onChange={(e) => setNewCaseDeceasedDni(e.target.value.toUpperCase())}
                 />
               </div>
-              <div className="flex justify-end gap-3 mt-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de fallecimiento</label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={newCaseDateOfDeath}
+                  onChange={(e) => setNewCaseDateOfDeath(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="new-has-will"
+                  checked={newCaseHasWill}
+                  onChange={(e) => setNewCaseHasWill(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <label htmlFor="new-has-will" className="text-sm font-medium text-gray-700">El causante tiene testamento</label>
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
                 <form method="dialog">
                   <button className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium transition-colors">Cancelar</button>
                 </form>

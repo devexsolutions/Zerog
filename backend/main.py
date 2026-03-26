@@ -119,13 +119,14 @@ def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
 
 @app.post("/cases/", response_model=schemas.Case)
 def create_case(case: schemas.CaseCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # Override user_id with logged in user
     db_case = models.Case(
-        user_id=str(current_user.id), 
-        status=case.status, 
+        user_id=str(current_user.id),
+        status=case.status,
         deadline=case.deadline,
         date_of_death=case.date_of_death,
-        has_will=case.has_will
+        has_will=case.has_will,
+        deceased_name=case.deceased_name,
+        deceased_dni=case.deceased_dni,
     )
     db.add(db_case)
     db.commit()
@@ -134,7 +135,6 @@ def create_case(case: schemas.CaseCreate, db: Session = Depends(get_db), current
 
 @app.get("/cases/", response_model=List[schemas.Case])
 def read_cases(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # Filter by user_id for Multi-tenancy
     cases = db.query(models.Case).filter(models.Case.user_id == str(current_user.id)).offset(skip).limit(limit).all()
     return cases
 
@@ -145,18 +145,99 @@ def read_case(case_id: int, db: Session = Depends(get_db), current_user: models.
         raise HTTPException(status_code=404, detail="Case not found")
     return db_case
 
+@app.put("/cases/{case_id}", response_model=schemas.Case)
+def update_case(
+    case_id: int,
+    case_update: schemas.CaseUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if db_case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    update_data = case_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_case, key, value)
+    db.commit()
+    db.refresh(db_case)
+    return db_case
+
+@app.delete("/cases/{case_id}", status_code=204)
+def delete_case(case_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if db_case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    db.delete(db_case)
+    db.commit()
+    return None
+
 # --- Heirs ---
+
+@app.get("/cases/{case_id}/heirs/", response_model=List[schemas.Heir])
+def read_heirs(case_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if not db_case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return db_case.heirs
 
 @app.post("/cases/{case_id}/heirs/", response_model=schemas.Heir)
 def create_heir_for_case(case_id: int, heir: schemas.HeirCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
     if not db_case:
-         raise HTTPException(status_code=404, detail="Case not found")
-    db_heir = models.Heir(**heir.dict(), case_id=case_id)
+        raise HTTPException(status_code=404, detail="Case not found")
+    db_heir = models.Heir(
+        case_id=case_id,
+        name=heir.name,
+        nif=heir.nif,
+        age=heir.age,
+        relationship_degree=heir.relationship_degree,
+        share_percentage=heir.share_percentage,
+        pre_existing_wealth=heir.pre_existing_wealth,
+        tax_percentage=heir.tax_percentage,
+        fiscal_residence=heir.fiscal_residence,
+    )
     db.add(db_heir)
     db.commit()
     db.refresh(db_heir)
     return db_heir
+
+@app.put("/cases/{case_id}/heirs/{heir_id}", response_model=schemas.Heir)
+def update_heir(
+    case_id: int,
+    heir_id: int,
+    heir_update: schemas.HeirUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if not db_case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    db_heir = db.query(models.Heir).filter(models.Heir.id == heir_id, models.Heir.case_id == case_id).first()
+    if not db_heir:
+        raise HTTPException(status_code=404, detail="Heir not found")
+    update_data = heir_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_heir, key, value)
+    db.commit()
+    db.refresh(db_heir)
+    return db_heir
+
+@app.delete("/cases/{case_id}/heirs/{heir_id}", status_code=204)
+def delete_heir(
+    case_id: int,
+    heir_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if not db_case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    db_heir = db.query(models.Heir).filter(models.Heir.id == heir_id, models.Heir.case_id == case_id).first()
+    if not db_heir:
+        raise HTTPException(status_code=404, detail="Heir not found")
+    db.delete(db_heir)
+    db.commit()
+    return None
 
 # --- Assets ---
 
@@ -181,6 +262,23 @@ def read_assets(case_id: int, db: Session = Depends(get_db), current_user: model
     if db_case is None:
         raise HTTPException(status_code=404, detail="Case not found")
     return db_case.assets
+
+@app.delete("/cases/{case_id}/assets/{asset_id}", status_code=204)
+def delete_asset(
+    case_id: int,
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    db_case = db.query(models.Case).filter(models.Case.id == case_id, models.Case.user_id == str(current_user.id)).first()
+    if db_case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    db_asset = db.query(models.Asset).filter(models.Asset.id == asset_id, models.Asset.case_id == case_id).first()
+    if db_asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    db.delete(db_asset)
+    db.commit()
+    return None
 
 @app.put("/cases/{case_id}/assets/{asset_id}", response_model=schemas.Asset)
 def update_asset(
